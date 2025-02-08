@@ -1,0 +1,22 @@
+[gd_scene load_steps=14 format=3 uid="uid://8fgnaauwcnga"]
+
+[ext_resource type="Texture2D" uid="uid://dywfswjpugnyp" path="res://assets/images/default.png" id="1_3ycwl"]
+[ext_resource type="Script" path="res://scripts/Cell.cs" id="1_eh7oq"]
+[ext_resource type="Texture2D" uid="uid://drtrcgn34kkiy" path="res://assets/images/empty0.png" id="2_ocyn3"]
+[ext_resource type="Texture2D" uid="uid://631vkg8381b8" path="res://assets/images/empty1.png" id="3_mvoy8"]
+[ext_resource type="Texture2D" uid="uid://b08166dc22lol" path="res://assets/images/empty2.png" id="4_jhdtw"]
+[ext_resource type="Texture2D" uid="uid://cd8e123jh1qug" path="res://assets/images/empty3.png" id="5_g7mt1"]
+[ext_resource type="Texture2D" uid="uid://cg3vx3h8u20gs" path="res://assets/images/empty4.png" id="6_divym"]
+[ext_resource type="Texture2D" uid="uid://dwaw14o681rsd" path="res://assets/images/empty5.png" id="7_4ilaw"]
+[ext_resource type="Texture2D" uid="uid://crfd4d5pauiac" path="res://assets/images/empty6.png" id="8_51hvk"]
+[ext_resource type="Texture2D" uid="uid://c7g30iur153b5" path="res://assets/images/empty7.png" id="9_376rm"]
+[ext_resource type="Texture2D" uid="uid://xk1guyk40he4" path="res://assets/images/empty8.png" id="10_2c4re"]
+[ext_resource type="Texture2D" uid="uid://bwc38dwqtfkjq" path="res://assets/images/flag.png" id="12_ugeob"]
+[ext_resource type="Texture2D" uid="uid://daknrv6v7t07p" path="res://assets/images/mine.png" id="13_3l05r"]
+
+[node name="Cell" type="Node2D"]
+script = ExtResource("1_eh7oq")
+textures = [ExtResource("2_ocyn3"), ExtResource("3_mvoy8"), ExtResource("4_jhdtw"), ExtResource("5_g7mt1"), ExtResource("6_divym"), ExtResource("7_4ilaw"), ExtResource("8_51hvk"), ExtResource("9_376rm"), ExtResource("10_2c4re"), ExtResource("1_3ycwl"), ExtResource("12_ugeob"), ExtResource("13_3l05r")]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_3ycwl")

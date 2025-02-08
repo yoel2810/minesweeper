@@ -1,0 +1,40 @@
+[gd_scene load_steps=5 format=3 uid="uid://bw6wpdhwysv5n"]
+
+[ext_resource type="Script" path="res://scripts/GameOverUi.cs" id="1_tum2r"]
+[ext_resource type="FontFile" uid="uid://ek4w13oo7qks" path="res://assets/fonts/ARCADE_I.TTF" id="2_d7g0w"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_8cjcs"]
+font = ExtResource("2_d7g0w")
+font_size = 50
+font_color = Color(0, 0, 0, 1)
+
+[sub_resource type="Theme" id="Theme_kkdn5"]
+default_font = ExtResource("2_d7g0w")
+default_font_size = 20
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_tum2r")
+
+[node name="Label" type="Label" parent="."]
+layout_mode = 0
+offset_left = 394.0
+offset_top = 127.0
+offset_right = 834.0
+offset_bottom = 178.0
+text = "YOU WIN"
+label_settings = SubResource("LabelSettings_8cjcs")
+
+[node name="Button" type="Button" parent="."]
+layout_mode = 0
+offset_left = 478.0
+offset_top = 315.0
+offset_right = 624.0
+offset_bottom = 346.0
+theme = SubResource("Theme_kkdn5")
+text = "PLAY AGAIN"
