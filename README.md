@@ -29,3 +29,8 @@ Build a Minesweeper game in C++, then create a machine-learning agent that can l
 - [ ]  Train the first model.
 - [ ]  Evaluate the model against the baseline.
 - [ ]  Visualize the agent playing.
+
+how to run:
+cmake -S . -B build -G Ninja
+cmake --build build
+./build/bin/minesweeper.exe
