@@ -1,4 +1,6 @@
 #include "Cell.hpp"
+#include "Game.hpp"
+#include "UI.hpp"
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -6,18 +8,12 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Event.hpp>
+#include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <unordered_map>
-
-#define CELL_SIZE_PX 32
-#define GRID_SIZE 12
-
-enum GameState { MENU, PLAYING, GAME_OVER, GAME_WON };
-
-GameState currentGameState = MENU;
 
 std::unordered_map<std::string, sf::Texture> cellTexturesDictionary = {
     {"default", sf::Texture("assets/images/default.png")},
@@ -33,122 +29,27 @@ std::unordered_map<std::string, sf::Texture> cellTexturesDictionary = {
     {"7", sf::Texture("assets/images/empty7.png")},
     {"8", sf::Texture("assets/images/empty8.png")}};
 
-Cell grid[GRID_SIZE][GRID_SIZE];
-
-void resetGame(int firstClickI, int firstClickJ) {
-  for (int i = 0; i < GRID_SIZE; i++) {
-    for (int j = 0; j < GRID_SIZE; j++) {
-      grid[i][j] = Cell();
-      if (i == firstClickI && j == firstClickJ)
-        continue;
-
-      if (rand() % 5 == 0)
-        grid[i][j].isMine = true;
-    }
-  }
-  currentGameState = PLAYING;
-
-  for (int i = 0; i < GRID_SIZE; i++) {
-    for (int j = 0; j < GRID_SIZE; j++) {
-
-      if (!grid[i][j].isMine) {
-        int numMines = 0;
-
-        for (int dx = -1; dx <= 1; dx++) {
-          for (int dy = -1; dy <= 1; dy++) {
-            if (dx == 0 && dy == 0)
-              continue;
-
-            int nx = i + dx;
-            int ny = j + dy;
-
-            if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-              if (grid[nx][ny].isMine)
-                numMines++;
-            }
-          }
-        }
-
-        grid[i][j].minesCount = numMines;
-      }
-    }
-  }
-}
-
-void openCells(int i, int j) {
-  if (i < 0 || i >= GRID_SIZE || j < 0 || j >= GRID_SIZE)
-    return;
-
-  if (grid[i][j].isFlag)
-    return;
-
-  if (grid[i][j].isMine) {
-    std::cout << "GAME OVER" << std::endl;
-    currentGameState = GAME_OVER;
-    return;
-  }
-
-  if (!grid[i][j].isRevealed) {
-    grid[i][j].isRevealed = true;
-
-    if (grid[i][j].minesCount == 0) {
-      for (int dx = -1; dx <= 1; dx++) {
-        for (int dy = -1; dy <= 1; dy++) {
-          if (dx == 0 && dy == 0)
-            continue;
-
-          int nx = i + dx;
-          int ny = j + dy;
-
-          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-            openCells(nx, ny);
-          }
-        }
-      }
-    }
-  }
-}
-
-bool checkWinCondition() {
-  for (int i = 0; i < GRID_SIZE; i++) {
-    for (int j = 0; j < GRID_SIZE; j++) {
-      if (!grid[i][j].isMine && !grid[i][j].isRevealed)
-        return false;
-    }
-  }
-  return true;
-}
-
-void checkAndHandleWin() {
-  if (currentGameState == PLAYING && checkWinCondition()) {
-    std::cout << "GAME WON" << std::endl;
-    currentGameState = GAME_WON;
-  }
-}
-
-void renderBoard(sf::RenderWindow &window) {
+void renderBoard(sf::RenderWindow &window, Game &game) {
   sf::Sprite sprite = sf::Sprite(cellTexturesDictionary["default"]);
   for (int i = 0; i < GRID_SIZE; i++) {
     for (int j = 0; j < GRID_SIZE; j++) {
-
-      if (grid[i][j].isRevealed) {
-
-        if (grid[i][j].isMine)
+      if (game.grid[i][j].isRevealed) {
+        if (game.grid[i][j].isMine)
           sprite.setTexture(cellTexturesDictionary["mine"]);
-        else if (grid[i][j].isFlag)
+        else if (game.grid[i][j].isFlag)
           sprite.setTexture(cellTexturesDictionary["flag"]);
         else
           sprite.setTexture(
-              cellTexturesDictionary[std::to_string(grid[i][j].minesCount)]);
+              cellTexturesDictionary[std::to_string(game.grid[i][j].minesCount)]);
       } else {
-        if (grid[i][j].isFlag)
+        if (game.grid[i][j].isFlag)
           sprite.setTexture(cellTexturesDictionary["flag"]);
         else
           sprite.setTexture(cellTexturesDictionary["default"]);
       }
-
-      sprite.setPosition(sf::Vector2f(static_cast<float>(i * CELL_SIZE_PX),
-                                      static_cast<float>(j * CELL_SIZE_PX)));
+      sprite.setPosition(sf::Vector2f(
+          static_cast<float>(i * CELL_SIZE_PX + BOARD_OFFSET_X),
+          static_cast<float>(j * CELL_SIZE_PX + BOARD_OFFSET_Y)));
       window.draw(sprite);
     }
   }
@@ -157,7 +58,30 @@ void renderBoard(sf::RenderWindow &window) {
 int main() {
   sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper");
   window.setFramerateLimit(60);
-  bool isFirstClick = true;
+
+  sf::Font font;
+  if (!font.openFromFile("assets/fonts/DejaVuSans.ttf")) {
+    std::cerr << "Failed to load font assets/fonts/DejaVuSans.ttf\n";
+    return 1;
+  }
+
+  Game game;
+  game.toMenu();
+
+  // Create buttons
+  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 185.f), sf::Vector2f(200.f, 50.f), 20);
+  Button hudRestartButton(font, "R", sf::Vector2f(304.f, 8.f), sf::Vector2f(32.f, 32.f), 18);
+  Button gameOverRestartButton(font, "Restart", sf::Vector2f(220.f, 240.f), sf::Vector2f(200.f, 42.f), 18);
+  Button gameOverMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f), sf::Vector2f(200.f, 42.f), 18);
+  gameOverMenuButton.normal = sf::Color(90, 90, 90);
+  gameOverMenuButton.hover = sf::Color(70, 70, 70);
+  gameOverMenuButton.shape.setFillColor(gameOverMenuButton.normal);
+
+  Button gameWonAgainButton(font, "Play Again", sf::Vector2f(220.f, 240.f), sf::Vector2f(200.f, 42.f), 18);
+  Button gameWonMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f), sf::Vector2f(200.f, 42.f), 18);
+  gameWonMenuButton.normal = sf::Color(90, 90, 90);
+  gameWonMenuButton.hover = sf::Color(70, 70, 70);
+  gameWonMenuButton.shape.setFillColor(gameWonMenuButton.normal);
 
   while (window.isOpen()) {
     while (const std::optional event = window.pollEvent()) {
@@ -165,42 +89,142 @@ int main() {
         window.close();
       }
 
-      if (const auto *mouseClick =
-              event->getIf<sf::Event::MouseButtonPressed>()) {
+      // Global key handling
+      if (const auto *key = event->getIf<sf::Event::KeyPressed>()) {
+        if (key->code == sf::Keyboard::Key::R) {
+          game.restart();
+        } else if (key->code == sf::Keyboard::Key::Escape) {
+          game.toMenu();
+        }
+      }
 
-        int col = mouseClick->position.x / CELL_SIZE_PX;
-        int row = mouseClick->position.y / CELL_SIZE_PX;
+      // Mouse moved -> hover updates
+      if (const auto *moved = event->getIf<sf::Event::MouseMoved>()) {
+        sf::Vector2i pos(moved->position.x, moved->position.y);
+        // Update hover per state
+        if (game.state == MENU) {
+          menuStartButton.setHovered(menuStartButton.contains(pos));
+        } else if (game.state == PLAYING) {
+          hudRestartButton.setHovered(hudRestartButton.contains(pos));
+        } else if (game.state == GAME_OVER) {
+          gameOverRestartButton.setHovered(gameOverRestartButton.contains(pos));
+          gameOverMenuButton.setHovered(gameOverMenuButton.contains(pos));
+        } else if (game.state == GAME_WON) {
+          gameWonAgainButton.setHovered(gameWonAgainButton.contains(pos));
+          gameWonMenuButton.setHovered(gameWonMenuButton.contains(pos));
+        }
+      }
 
-        if (currentGameState == GAME_OVER || currentGameState == GAME_WON)
-          continue;
+      if (const auto *mouseClick = event->getIf<sf::Event::MouseButtonPressed>()) {
+        sf::Vector2i mousePos(mouseClick->position.x, mouseClick->position.y);
 
-        if (col < 0 || col >= GRID_SIZE || row < 0 || row >= GRID_SIZE)
-          continue;
-
-        if (mouseClick->button == sf::Mouse::Button::Left) {
-          std::cout << "Left click detected at: " << col << ", " << row
-                    << std::endl;
-
-          if (isFirstClick) {
-            resetGame(col, row);
-            isFirstClick = false;
+        // MENU handling
+        if (game.state == MENU) {
+          if (mouseClick->button == sf::Mouse::Button::Left) {
+            if (menuStartButton.contains(mousePos)) {
+              // Start playing: empty board, clock started, wait for first click to place mines
+              // Reset any leftover state and go to PLAYING
+              for (int i = 0; i < GRID_SIZE; i++)
+                for (int j = 0; j < GRID_SIZE; j++)
+                  game.grid[i][j] = Cell();
+              game.state = PLAYING;
+              game.isFirstClick = true;
+              game.gameClock.restart();
+              game.elapsedSeconds = 0.f;
+            }
           }
-          openCells(col, row);
-          checkAndHandleWin();
-        } else if (mouseClick->button == sf::Mouse::Button::Right) {
-          std::cout << "Right click detected at: " << col << ", " << row
-                    << std::endl;
+          continue;
+        }
 
-          if (!grid[col][row].isRevealed)
-            grid[col][row].isFlag = !grid[col][row].isFlag;
-          // Optional: also check win after flagging if using flag-based win condition
-          // checkAndHandleWin();
+        // HUD restart button is global (visible in PLAYING, but also handle in terminal states)
+        // For PLAYING, check header area first
+        if (game.state == PLAYING) {
+          if (hudRestartButton.contains(mousePos) && mouseClick->button == sf::Mouse::Button::Left) {
+            game.restart();
+            continue;
+          }
+        }
+
+        if (game.state == GAME_OVER) {
+          if (mouseClick->button == sf::Mouse::Button::Left) {
+            if (gameOverRestartButton.contains(mousePos)) {
+              game.restart();
+            } else if (gameOverMenuButton.contains(mousePos)) {
+              game.toMenu();
+            }
+          }
+          continue;
+        }
+
+        if (game.state == GAME_WON) {
+          if (mouseClick->button == sf::Mouse::Button::Left) {
+            if (gameWonAgainButton.contains(mousePos)) {
+              game.restart();
+              // After restart we are in MENU; optionally auto-start
+              // Keep in MENU so player clicks Start again
+            } else if (gameWonMenuButton.contains(mousePos)) {
+              game.toMenu();
+            }
+          }
+          continue;
+        }
+
+        if (game.state == RESTARTING) {
+          continue;
+        }
+
+        // PLAYING board clicks
+        if (game.state == PLAYING) {
+          int col = (mouseClick->position.x - BOARD_OFFSET_X) / CELL_SIZE_PX;
+          int row = (mouseClick->position.y - BOARD_OFFSET_Y) / CELL_SIZE_PX;
+
+          if (col < 0 || col >= GRID_SIZE || row < 0 || row >= GRID_SIZE)
+            continue;
+
+          if (mouseClick->button == sf::Mouse::Button::Left) {
+            std::cout << "Left click detected at: " << col << ", " << row << std::endl;
+            if (game.isFirstClick) {
+              game.resetGame(col, row);
+              game.isFirstClick = false;
+            }
+            game.openCells(col, row);
+            game.checkAndHandleWin();
+            if (game.state == GAME_OVER) {
+              game.elapsedSeconds = game.gameClock.getElapsedTime().asSeconds();
+            } else if (game.state == GAME_WON) {
+              // elapsed set in checkAndHandleWin
+            }
+          } else if (mouseClick->button == sf::Mouse::Button::Right) {
+            std::cout << "Right click detected at: " << col << ", " << row << std::endl;
+            game.toggleFlag(col, row);
+          }
         }
       }
     }
 
+    // RESTARTING is instant, but handle transition if it was set directly
+    if (game.state == RESTARTING) {
+      game.toMenu();
+    }
+
     window.clear(sf::Color(180, 180, 180));
-    renderBoard(window);
+    renderBoard(window, game);
+
+    // Always draw HUD (header) on top of board background
+    UI::drawHUD(window, font, game, hudRestartButton);
+
+    if (game.state == MENU) {
+      drawOverlay(window, sf::Color(180, 180, 180, 180));
+      // Re-draw board dimmed? overlay already dims, just draw menu
+      UI::drawMenu(window, font, menuStartButton);
+    } else if (game.state == GAME_OVER) {
+      UI::drawGameOver(window, font, game, gameOverRestartButton, gameOverMenuButton);
+    } else if (game.state == GAME_WON) {
+      UI::drawGameWon(window, font, game, gameWonAgainButton, gameWonMenuButton);
+    } else if (game.state == RESTARTING) {
+      UI::drawRestarting(window, font);
+    }
+
     window.display();
   }
   return 0;
