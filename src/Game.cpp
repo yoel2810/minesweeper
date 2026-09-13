@@ -41,14 +41,17 @@ void Game::resetGame(int firstClickI, int firstClickJ) {
 void Game::openCells(int i, int j) {
   if (i < 0 || i >= GRID_SIZE || j < 0 || j >= GRID_SIZE)
     return;
+
   if (grid[i][j].isFlag)
     return;
+
   if (grid[i][j].isMine) {
     std::cout << "GAME OVER" << std::endl;
     state = GAME_OVER;
     revealAllMines();
     return;
   }
+
   if (!grid[i][j].isRevealed) {
     grid[i][j].isRevealed = true;
     if (grid[i][j].minesCount == 0) {
@@ -85,9 +88,7 @@ void Game::checkAndHandleWin() {
   }
 }
 
-void Game::restart() {
-  toMenu();
-}
+void Game::restart() { toMenu(); }
 
 void Game::toMenu() {
   for (int i = 0; i < GRID_SIZE; i++) {

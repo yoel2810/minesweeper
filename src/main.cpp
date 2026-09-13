@@ -10,7 +10,6 @@
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
-#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <unordered_map>
@@ -39,17 +38,17 @@ void renderBoard(sf::RenderWindow &window, Game &game) {
         else if (game.grid[i][j].isFlag)
           sprite.setTexture(cellTexturesDictionary["flag"]);
         else
-          sprite.setTexture(
-              cellTexturesDictionary[std::to_string(game.grid[i][j].minesCount)]);
+          sprite.setTexture(cellTexturesDictionary[std::to_string(
+              game.grid[i][j].minesCount)]);
       } else {
         if (game.grid[i][j].isFlag)
           sprite.setTexture(cellTexturesDictionary["flag"]);
         else
           sprite.setTexture(cellTexturesDictionary["default"]);
       }
-      sprite.setPosition(sf::Vector2f(
-          static_cast<float>(i * CELL_SIZE_PX + BOARD_OFFSET_X),
-          static_cast<float>(j * CELL_SIZE_PX + BOARD_OFFSET_Y)));
+      sprite.setPosition(
+          sf::Vector2f(static_cast<float>(i * CELL_SIZE_PX + BOARD_OFFSET_X),
+                       static_cast<float>(j * CELL_SIZE_PX + BOARD_OFFSET_Y)));
       window.draw(sprite);
     }
   }
@@ -69,16 +68,22 @@ int main() {
   game.toMenu();
 
   // Create buttons
-  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 185.f), sf::Vector2f(200.f, 50.f), 20);
-  Button hudRestartButton(font, "R", sf::Vector2f(304.f, 8.f), sf::Vector2f(32.f, 32.f), 18);
-  Button gameOverRestartButton(font, "Restart", sf::Vector2f(220.f, 240.f), sf::Vector2f(200.f, 42.f), 18);
-  Button gameOverMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f), sf::Vector2f(200.f, 42.f), 18);
+  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 185.f),
+                         sf::Vector2f(200.f, 50.f), 20);
+  Button hudRestartButton(font, "R", sf::Vector2f(304.f, 8.f),
+                          sf::Vector2f(32.f, 32.f), 18);
+  Button gameOverRestartButton(font, "Restart", sf::Vector2f(220.f, 240.f),
+                               sf::Vector2f(200.f, 42.f), 18);
+  Button gameOverMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f),
+                            sf::Vector2f(200.f, 42.f), 18);
   gameOverMenuButton.normal = sf::Color(90, 90, 90);
   gameOverMenuButton.hover = sf::Color(70, 70, 70);
   gameOverMenuButton.shape.setFillColor(gameOverMenuButton.normal);
 
-  Button gameWonAgainButton(font, "Play Again", sf::Vector2f(220.f, 240.f), sf::Vector2f(200.f, 42.f), 18);
-  Button gameWonMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f), sf::Vector2f(200.f, 42.f), 18);
+  Button gameWonAgainButton(font, "Play Again", sf::Vector2f(220.f, 240.f),
+                            sf::Vector2f(200.f, 42.f), 18);
+  Button gameWonMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f),
+                           sf::Vector2f(200.f, 42.f), 18);
   gameWonMenuButton.normal = sf::Color(90, 90, 90);
   gameWonMenuButton.hover = sf::Color(70, 70, 70);
   gameWonMenuButton.shape.setFillColor(gameWonMenuButton.normal);
@@ -115,15 +120,16 @@ int main() {
         }
       }
 
-      if (const auto *mouseClick = event->getIf<sf::Event::MouseButtonPressed>()) {
+      if (const auto *mouseClick =
+              event->getIf<sf::Event::MouseButtonPressed>()) {
         sf::Vector2i mousePos(mouseClick->position.x, mouseClick->position.y);
 
         // MENU handling
         if (game.state == MENU) {
           if (mouseClick->button == sf::Mouse::Button::Left) {
             if (menuStartButton.contains(mousePos)) {
-              // Start playing: empty board, clock started, wait for first click to place mines
-              // Reset any leftover state and go to PLAYING
+              // Start playing: empty board, clock started, wait for first click
+              // to place mines Reset any leftover state and go to PLAYING
               for (int i = 0; i < GRID_SIZE; i++)
                 for (int j = 0; j < GRID_SIZE; j++)
                   game.grid[i][j] = Cell();
@@ -136,10 +142,11 @@ int main() {
           continue;
         }
 
-        // HUD restart button is global (visible in PLAYING, but also handle in terminal states)
-        // For PLAYING, check header area first
+        // HUD restart button is global (visible in PLAYING, but also handle in
+        // terminal states) For PLAYING, check header area first
         if (game.state == PLAYING) {
-          if (hudRestartButton.contains(mousePos) && mouseClick->button == sf::Mouse::Button::Left) {
+          if (hudRestartButton.contains(mousePos) &&
+              mouseClick->button == sf::Mouse::Button::Left) {
             game.restart();
             continue;
           }
@@ -182,7 +189,8 @@ int main() {
             continue;
 
           if (mouseClick->button == sf::Mouse::Button::Left) {
-            std::cout << "Left click detected at: " << col << ", " << row << std::endl;
+            std::cout << "Left click detected at: " << col << ", " << row
+                      << std::endl;
             if (game.isFirstClick) {
               game.resetGame(col, row);
               game.isFirstClick = false;
@@ -195,7 +203,8 @@ int main() {
               // elapsed set in checkAndHandleWin
             }
           } else if (mouseClick->button == sf::Mouse::Button::Right) {
-            std::cout << "Right click detected at: " << col << ", " << row << std::endl;
+            std::cout << "Right click detected at: " << col << ", " << row
+                      << std::endl;
             game.toggleFlag(col, row);
           }
         }
@@ -218,9 +227,11 @@ int main() {
       // Re-draw board dimmed? overlay already dims, just draw menu
       UI::drawMenu(window, font, menuStartButton);
     } else if (game.state == GAME_OVER) {
-      UI::drawGameOver(window, font, game, gameOverRestartButton, gameOverMenuButton);
+      UI::drawGameOver(window, font, game, gameOverRestartButton,
+                       gameOverMenuButton);
     } else if (game.state == GAME_WON) {
-      UI::drawGameWon(window, font, game, gameWonAgainButton, gameWonMenuButton);
+      UI::drawGameWon(window, font, game, gameWonAgainButton,
+                      gameWonMenuButton);
     } else if (game.state == RESTARTING) {
       UI::drawRestarting(window, font);
     }
