@@ -1,4 +1,5 @@
 #include "Cell.hpp"
+#include "DisplaySettings.hpp"
 #include "Game.hpp"
 #include "UI.hpp"
 #include <SFML/Graphics.hpp>
@@ -30,8 +31,11 @@ std::unordered_map<std::string, sf::Texture> cellTexturesDictionary = {
 
 void renderBoard(sf::RenderWindow &window, Game &game) {
   sf::Sprite sprite = sf::Sprite(cellTexturesDictionary["default"]);
-  for (int i = 0; i < GRID_SIZE; i++) {
-    for (int j = 0; j < GRID_SIZE; j++) {
+  const auto size = window.getSize();
+  const auto layout =
+      BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
+  for (int i = 0; i < game.columns(); i++) {
+    for (int j = 0; j < game.rows(); j++) {
       if (game.grid[i][j].isRevealed) {
         if (game.grid[i][j].isMine)
           sprite.setTexture(cellTexturesDictionary["mine"]);
@@ -46,17 +50,23 @@ void renderBoard(sf::RenderWindow &window, Game &game) {
         else
           sprite.setTexture(cellTexturesDictionary["default"]);
       }
+      const auto textureSize = sprite.getTexture().getSize();
+      sprite.setScale({static_cast<float>(layout.cellSize) / textureSize.x,
+                       static_cast<float>(layout.cellSize) / textureSize.y});
       sprite.setPosition(
-          sf::Vector2f(static_cast<float>(i * CELL_SIZE_PX + BOARD_OFFSET_X),
-                       static_cast<float>(j * CELL_SIZE_PX + BOARD_OFFSET_Y)));
+          sf::Vector2f(static_cast<float>(i * layout.cellSize + layout.x),
+                       static_cast<float>(j * layout.cellSize + layout.y)));
       window.draw(sprite);
     }
   }
 }
 
 int main() {
-  sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper");
+  sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper",
+                          sf::Style::Default);
   window.setFramerateLimit(60);
+  window.setMinimumSize(sf::Vector2u(480, 360));
+  DisplaySettings displaySettings;
 
   sf::Font font;
   if (!font.openFromFile("assets/fonts/DejaVuSans.ttf")) {
@@ -68,8 +78,23 @@ int main() {
   game.toMenu();
 
   // Create buttons
-  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 185.f),
+  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 275.f),
                          sf::Vector2f(200.f, 50.f), 20);
+  NumberField columnsField(font, "Columns", {180.f, 190.f});
+  NumberField rowsField(font, "Rows", {340.f, 190.f});
+  std::string sizeError;
+  auto startGame = [&]() {
+    const auto columns = parseBoardDimension(columnsField.value);
+    const auto rows = parseBoardDimension(rowsField.value);
+    if (!columns || !rows) {
+      sizeError = "Enter columns and rows from 4 to 30.";
+      return;
+    }
+    game.start(*columns, *rows);
+    sizeError.clear();
+    columnsField.focus(false);
+    rowsField.focus(false);
+  };
   Button hudRestartButton(font, "R", sf::Vector2f(304.f, 8.f),
                           sf::Vector2f(32.f, 32.f), 18);
   Button gameOverRestartButton(font, "Restart", sf::Vector2f(220.f, 240.f),
@@ -88,10 +113,76 @@ int main() {
   gameWonMenuButton.hover = sf::Color(70, 70, 70);
   gameWonMenuButton.shape.setFillColor(gameWonMenuButton.normal);
 
+  UI::layoutControls(window.getSize(), menuStartButton, columnsField,
+                     rowsField, hudRestartButton, gameOverRestartButton,
+                     gameOverMenuButton, gameWonAgainButton,
+                     gameWonMenuButton);
+  auto toggleFullscreen = [&]() {
+    displaySettings.toggle(window.getSize());
+    const auto targetSize = displaySettings.targetSize(
+        sf::VideoMode::getDesktopMode().size);
+    window.create(sf::VideoMode(targetSize), "Minesweeper",
+                  displaySettings.windowStyle(), displaySettings.windowState());
+    window.setFramerateLimit(60);
+    if (displaySettings.fullscreen)
+      window.setPosition({0, 0});
+    else
+      window.setMinimumSize(sf::Vector2u(480, 360));
+    window.setView(sf::View(sf::FloatRect({}, sf::Vector2f(targetSize))));
+    UI::layoutControls(targetSize, menuStartButton, columnsField, rowsField,
+                       hudRestartButton, gameOverRestartButton,
+                       gameOverMenuButton, gameWonAgainButton,
+                       gameWonMenuButton);
+  };
+
   while (window.isOpen()) {
     while (const std::optional event = window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         window.close();
+      }
+
+      if (const auto *resized = event->getIf<sf::Event::Resized>()) {
+        window.setView(
+            sf::View(sf::FloatRect({}, sf::Vector2f(resized->size))));
+        UI::layoutControls(resized->size, menuStartButton, columnsField,
+                           rowsField, hudRestartButton,
+                           gameOverRestartButton, gameOverMenuButton,
+                           gameWonAgainButton, gameWonMenuButton);
+      }
+
+      if (const auto *key = event->getIf<sf::Event::KeyPressed>();
+          key && key->code == sf::Keyboard::Key::F11) {
+        if (displaySettings.pressToggleKey())
+          toggleFullscreen();
+        continue;
+      }
+
+      if (const auto *key = event->getIf<sf::Event::KeyReleased>();
+          key && key->code == sf::Keyboard::Key::F11) {
+        displaySettings.releaseToggleKey();
+        continue;
+      }
+
+      if (game.state == MENU) {
+        if (const auto *text = event->getIf<sf::Event::TextEntered>()) {
+          const auto previousColumns = columnsField.value;
+          const auto previousRows = rowsField.value;
+          columnsField.enter(text->unicode);
+          rowsField.enter(text->unicode);
+          if (columnsField.value != previousColumns || rowsField.value != previousRows)
+            sizeError.clear();
+        }
+        if (const auto *key = event->getIf<sf::Event::KeyPressed>()) {
+          if (key->code == sf::Keyboard::Key::Tab) {
+            const bool selectColumns = !columnsField.focused;
+            columnsField.focus(selectColumns);
+            rowsField.focus(!selectColumns);
+          } else if (key->code == sf::Keyboard::Key::Enter) {
+            startGame();
+          }
+          // Menu typing must not trigger gameplay shortcuts.
+          continue;
+        }
       }
 
       // Global key handling
@@ -127,16 +218,10 @@ int main() {
         // MENU handling
         if (game.state == MENU) {
           if (mouseClick->button == sf::Mouse::Button::Left) {
+            columnsField.focus(columnsField.contains(mousePos));
+            rowsField.focus(rowsField.contains(mousePos));
             if (menuStartButton.contains(mousePos)) {
-              // Start playing: empty board, clock started, wait for first click
-              // to place mines Reset any leftover state and go to PLAYING
-              for (int i = 0; i < GRID_SIZE; i++)
-                for (int j = 0; j < GRID_SIZE; j++)
-                  game.grid[i][j] = Cell();
-              game.state = PLAYING;
-              game.isFirstClick = true;
-              game.gameClock.restart();
-              game.elapsedSeconds = 0.f;
+              startGame();
             }
           }
           continue;
@@ -182,15 +267,19 @@ int main() {
 
         // PLAYING board clicks
         if (game.state == PLAYING) {
-          int col = (mouseClick->position.x - BOARD_OFFSET_X) / CELL_SIZE_PX;
-          int row = (mouseClick->position.y - BOARD_OFFSET_Y) / CELL_SIZE_PX;
-
-          if (col < 0 || col >= GRID_SIZE || row < 0 || row >= GRID_SIZE)
+          const auto size = window.getSize();
+          const auto layout =
+              BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
+          const auto cell = layout.cellAt(mousePos.x, mousePos.y);
+          if (!cell)
             continue;
+          const auto [col, row] = *cell;
 
           if (mouseClick->button == sf::Mouse::Button::Left) {
             std::cout << "Left click detected at: " << col << ", " << row
                       << std::endl;
+            if (game.grid[col][row].isFlag)
+              continue;
             if (game.isFirstClick) {
               game.resetGame(col, row);
               game.isFirstClick = false;
@@ -225,7 +314,7 @@ int main() {
     if (game.state == MENU) {
       drawOverlay(window, sf::Color(180, 180, 180, 180));
       // Re-draw board dimmed? overlay already dims, just draw menu
-      UI::drawMenu(window, font, menuStartButton);
+      UI::drawMenu(window, font, menuStartButton, columnsField, rowsField, sizeError);
     } else if (game.state == GAME_OVER) {
       UI::drawGameOver(window, font, game, gameOverRestartButton,
                        gameOverMenuButton);

@@ -1,24 +1,24 @@
 #pragma once
 #include "Cell.hpp"
+#include "BoardSettings.hpp"
+#include <vector>
 #include <SFML/System/Clock.hpp>
 #include <SFML/System/Time.hpp>
-
-#define CELL_SIZE_PX 32
-#define GRID_SIZE 12
-
-constexpr int HEADER_H = 48;
-constexpr int BOARD_OFFSET_X = (640 - GRID_SIZE * CELL_SIZE_PX) / 2; // 128
-constexpr int BOARD_OFFSET_Y = HEADER_H;
 
 enum GameState { MENU, PLAYING, GAME_OVER, GAME_WON, RESTARTING };
 
 class Game {
 public:
   GameState state = MENU;
-  Cell grid[GRID_SIZE][GRID_SIZE];
+  std::vector<std::vector<Cell>> grid = std::vector<std::vector<Cell>>(
+      DEFAULT_BOARD_SIZE, std::vector<Cell>(DEFAULT_BOARD_SIZE));
   bool isFirstClick = true;
   sf::Clock gameClock;
   float elapsedSeconds = 0.f;
+
+  int columns() const { return static_cast<int>(grid.size()); }
+  int rows() const { return static_cast<int>(grid.front().size()); }
+  bool start(int columns, int rows);
 
   void resetGame(int firstClickI, int firstClickJ);
   void openCells(int i, int j);
