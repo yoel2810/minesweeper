@@ -21,8 +21,8 @@ Build a Minesweeper game in C++, then create a machine-learning agent that can l
 
 ## Milestones
 
-- [ ]  Implement the Minesweeper game.
-- [ ]  Implement win/loss detection and game state management.
+- [V]  Implement the Minesweeper game.
+- [V]  Implement win/loss detection and game state management.
 - [ ]  Create a non-ML solver as a baseline.
 - [ ]  Design the ML problem and state representation.
 - [ ]  Generate training data.
@@ -34,3 +34,9 @@ how to run:
 cmake -S . -B build -G Ninja
 cmake --build build
 ./build/bin/minesweeper.exe
+
+or
+
+cmake -S . -B build-vs -G "Visual Studio 17 2022" -A x64
+cmake --build build-vs --config Release
+Start-Process .\build-vs\bin\Release\minesweeper.exe
