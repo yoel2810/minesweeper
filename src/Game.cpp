@@ -19,7 +19,9 @@ void Game::resetGame(int firstClickI, int firstClickJ) {
   for (int i = 0; i < columns(); i++) {
     for (int j = 0; j < rows(); j++) {
       grid[i][j] = Cell();
-      if (i == firstClickI && j == firstClickJ)
+      // Keep the first click and its 8 neighbours mine-free so the opening
+      // cell is always a 0 and flood-fills a region.
+      if (std::abs(i - firstClickI) <= 1 && std::abs(j - firstClickJ) <= 1)
         continue;
       if (rand() % 5 == 0)
         grid[i][j].isMine = true;

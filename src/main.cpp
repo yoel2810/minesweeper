@@ -8,10 +8,15 @@
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
+#include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <optional>
 
 int main() {
+  // Seed rand() so mine layouts differ between runs.
+  std::srand(static_cast<unsigned>(std::time(nullptr)));
+
   sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper",
                           sf::Style::Default);
   window.setFramerateLimit(60);
