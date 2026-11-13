@@ -5,10 +5,10 @@
 // "Pocket LCD" theme: a four-shade green reflective screen set in a plastic
 // handheld bezel, with magenta rubber buttons for the main actions.
 namespace Palette {
-inline const sf::Color Darkest{15, 56, 15};
-inline const sf::Color Dark{48, 98, 48};
-inline const sf::Color Light{139, 172, 15};
-inline const sf::Color Lightest{155, 188, 15};
+inline const sf::Color Darkest{11, 42, 11};
+inline const sf::Color Dark{36, 74, 36};
+inline const sf::Color Light{104, 129, 11};
+inline const sf::Color Lightest{116, 141, 11};
 inline const sf::Color Body{201, 195, 182};
 inline const sf::Color Bezel{142, 136, 124};
 inline const sf::Color Rubber{163, 25, 91};
