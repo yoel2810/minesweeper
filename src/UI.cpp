@@ -106,23 +106,26 @@ void drawArt(sf::RenderWindow &w, const char *const *art, sf::Vector2f cellPos,
   }
 }
 
-// Raised block: lightest top-left edge, darkest bottom-right edge. Light and
-// Lightest are close shades, so the edges, not the fill, carry the depth.
+// Hidden and revealed cells cover exactly the same square; the dark grid
+// lines are the board background showing through the gaps between cells.
+
+// Raised block: lightest top-left edge, dark bottom-right edge. Hovering
+// presses the whole block flat in the mid shade.
 void drawRaised(sf::RenderWindow &w, sf::Vector2f pos, float size, bool hover) {
+  if (hover) {
+    fillRect(w, pos, {size, size}, Palette::Dark);
+    return;
+  }
   const float bevel = std::max(1.f, std::floor(size / 10.f));
-  fillRect(w, pos, {size, size}, Palette::Darkest);
+  fillRect(w, pos, {size, size}, Palette::Dark);
   fillRect(w, pos, {size - bevel, size - bevel}, Palette::Lightest);
   fillRect(w, pos + sf::Vector2f(bevel, bevel),
-           {size - 2.f * bevel, size - 2.f * bevel},
-           hover ? Palette::Dark : Palette::Light);
+           {size - 2.f * bevel, size - 2.f * bevel}, Palette::Light);
 }
 
 void drawFlat(sf::RenderWindow &w, sf::Vector2f pos, float size,
               sf::Color fill) {
-  fillRect(w, pos, {size, size}, Palette::Light);
-  const float inset = size >= 8.f ? 1.f : 0.f;
-  fillRect(w, pos + sf::Vector2f(inset, inset),
-           {size - 2.f * inset, size - 2.f * inset}, fill);
+  fillRect(w, pos, {size, size}, fill);
 }
 
 void drawNumber(sf::RenderWindow &w, sf::Font &font, int count,
@@ -472,10 +475,14 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game) {
   const auto layout =
       BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
   const float cell = static_cast<float>(layout.cellSize);
+  // Each cell leaves a gap on its right and bottom for the grid line, so
+  // the frame is thinner on those sides to keep all four borders equal.
+  const float gap = std::max(1.f, std::floor(cell / 15.f));
+  const float inner = cell - gap;
   const float frame = 3.f;
-  fillRect(w,
-           {layout.x - frame, layout.y - frame},
-           {layout.columns * cell + 2.f * frame, layout.rows * cell + 2.f * frame},
+  fillRect(w, {layout.x - frame, layout.y - frame},
+           {layout.columns * cell + 2.f * frame - gap,
+            layout.rows * cell + 2.f * frame - gap},
            Palette::Darkest);
 
   std::optional<std::pair<int, int>> hovered;
@@ -491,20 +498,20 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game) {
                              static_cast<float>(layout.y) + j * cell);
       const bool exploded = i == game.explodedColumn && j == game.explodedRow;
       if (c.isRevealed && c.isMine) {
-        drawFlat(w, pos, cell, exploded ? Palette::Darkest : Palette::Lightest);
-        drawArt(w, MINE_ART, pos, cell,
+        drawFlat(w, pos, inner, exploded ? Palette::Darkest : Palette::Lightest);
+        drawArt(w, MINE_ART, pos, inner,
                 exploded ? Palette::Lightest : Palette::Darkest,
                 exploded ? Palette::Darkest : Palette::Lightest);
       } else if (c.isRevealed && !c.isFlag) {
-        drawFlat(w, pos, cell, Palette::Lightest);
+        drawFlat(w, pos, inner, Palette::Lightest);
         if (c.minesCount > 0)
-          drawNumber(w, font, c.minesCount, pos, cell);
+          drawNumber(w, font, c.minesCount, pos, inner);
       } else {
         const bool hover =
             !c.isRevealed && hovered && hovered->first == i && hovered->second == j;
-        drawRaised(w, pos, cell, hover);
+        drawRaised(w, pos, inner, hover);
         if (c.isFlag)
-          drawArt(w, FLAG_ART, pos, cell, Palette::Darkest, Palette::Darkest);
+          drawArt(w, FLAG_ART, pos, inner, Palette::Darkest, Palette::Darkest);
       }
     }
   }
