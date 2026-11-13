@@ -22,7 +22,8 @@
 
 ## Gotchas & Conventions
 - Board size is chosen in the menu (columns × rows, 4–30 each) and passed to `Game::start`; layout adapts to window size via `BoardLayout::fit` — no hardcoded grid size anymore
-- Mines are placed lazily on the first click: `main.cpp` calls `game.resetGame(col,row)` when `game.isFirstClick` is set. Density ~20% (`rand() % 5 == 0` in `Game::resetGame`); the first click and its 8 neighbours are always mine-free, so the opening cell is a 0 and flood-fills
+- Difficulty is chosen in the menu: EASY 10% / MEDIUM 15% (default) / HARD 20% (`presetMinePercent` in `BoardSettings.hpp`) or CUSTOM (typed in the `MINES %` field, 5–50; typing there auto-selects CUSTOM). The percentage goes to `Game::start(columns, rows, minePercent)` and is stored in `Game::minePercent`
+- Mines are placed lazily on the first click: `main.cpp` calls `game.resetGame(col,row)` when `game.isFirstClick` is set. `resetGame` places an exact count, `mineCountFor` = round(cells × percent / 100), capped at the cells outside the safe area; the first click and its 8 neighbours are always mine-free, so the opening cell is a 0 and flood-fills
 - `rand()` is seeded once with `std::time(nullptr)` at the top of `main()` in `src/main.cpp`; `board_tests` does not seed, so its layouts are deterministic
 - Recursive flood-fill in `Game::openCells`; `checkWinCondition` requires all non-mines revealed
 - `.clangd:3-8` hardcodes MSYS2 UCRT64 system includes (`C:/msys64/ucrt64/include/c++/16.2.0`); update if toolchain changes

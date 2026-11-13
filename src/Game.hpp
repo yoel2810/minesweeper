@@ -17,10 +17,11 @@ public:
   float elapsedSeconds = 0.f;
   int explodedColumn = -1; // mine that ended the game; -1 when none
   int explodedRow = -1;
+  int minePercent = DEFAULT_MINE_PERCENT; // share of cells that are mines
 
   int columns() const { return static_cast<int>(grid.size()); }
   int rows() const { return static_cast<int>(grid.front().size()); }
-  bool start(int columns, int rows);
+  bool start(int columns, int rows, int minePercent = DEFAULT_MINE_PERCENT);
 
   void resetGame(int firstClickI, int firstClickJ);
   void openCells(int i, int j);

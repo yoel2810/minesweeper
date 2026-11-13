@@ -12,7 +12,36 @@ constexpr int HEADER_H = 64;
 // Space kept between the board and the window edges for the LCD bezel.
 constexpr int BOARD_PADDING = 24;
 
-inline std::optional<int> parseBoardDimension(const std::string &text) {
+// Mine density, as a percentage of all cells on the board.
+constexpr int MIN_MINE_PERCENT = 5;
+constexpr int MAX_MINE_PERCENT = 50;
+
+enum class Difficulty { Easy, Medium, Hard, Custom };
+constexpr int DIFFICULTY_COUNT = 4;
+
+inline const char *difficultyName(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy: return "EASY";
+  case Difficulty::Medium: return "MEDIUM";
+  case Difficulty::Hard: return "HARD";
+  default: return "CUSTOM";
+  }
+}
+
+// Preset densities. Custom has no preset: the player types the percentage.
+inline int presetMinePercent(Difficulty difficulty) {
+  switch (difficulty) {
+  case Difficulty::Easy: return 10;
+  case Difficulty::Hard: return 20;
+  default: return 15;
+  }
+}
+
+constexpr int DEFAULT_MINE_PERCENT = 15; // Medium
+
+// One- or two-digit number within [min, max].
+inline std::optional<int> parseTwoDigitNumber(const std::string &text, int min,
+                                              int max) {
   if (text.empty() || text.size() > 2)
     return std::nullopt;
   int value = 0;
@@ -21,9 +50,25 @@ inline std::optional<int> parseBoardDimension(const std::string &text) {
       return std::nullopt;
     value = value * 10 + digit - '0';
   }
-  if (value < MIN_BOARD_SIZE || value > MAX_BOARD_SIZE)
+  if (value < min || value > max)
     return std::nullopt;
   return value;
+}
+
+inline std::optional<int> parseBoardDimension(const std::string &text) {
+  return parseTwoDigitNumber(text, MIN_BOARD_SIZE, MAX_BOARD_SIZE);
+}
+
+inline std::optional<int> parseMinePercent(const std::string &text) {
+  return parseTwoDigitNumber(text, MIN_MINE_PERCENT, MAX_MINE_PERCENT);
+}
+
+// Mines placed on a board: the percentage of all cells, rounded, at least
+// one, and never more than the cells outside the safe first-click area.
+inline int mineCountFor(int columns, int rows, int minePercent,
+                        int availableCells) {
+  const int wanted = (columns * rows * minePercent + 50) / 100;
+  return std::clamp(wanted, 1, std::max(1, availableCells));
 }
 
 struct BoardLayout {

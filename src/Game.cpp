@@ -1,12 +1,16 @@
 #include "Game.hpp"
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
-bool Game::start(int newColumns, int newRows) {
+bool Game::start(int newColumns, int newRows, int newMinePercent) {
   if (newColumns < MIN_BOARD_SIZE || newColumns > MAX_BOARD_SIZE ||
-      newRows < MIN_BOARD_SIZE || newRows > MAX_BOARD_SIZE)
+      newRows < MIN_BOARD_SIZE || newRows > MAX_BOARD_SIZE ||
+      newMinePercent < MIN_MINE_PERCENT || newMinePercent > MAX_MINE_PERCENT)
     return false;
   grid.assign(newColumns, std::vector<Cell>(newRows));
+  minePercent = newMinePercent;
   state = PLAYING;
   isFirstClick = true;
   gameClock.restart();
@@ -16,16 +20,24 @@ bool Game::start(int newColumns, int newRows) {
 }
 
 void Game::resetGame(int firstClickI, int firstClickJ) {
+  // Keep the first click and its 8 neighbours mine-free so the opening cell
+  // is always a 0 and flood-fills a region.
+  std::vector<std::pair<int, int>> candidates;
   for (int i = 0; i < columns(); i++) {
     for (int j = 0; j < rows(); j++) {
       grid[i][j] = Cell();
-      // Keep the first click and its 8 neighbours mine-free so the opening
-      // cell is always a 0 and flood-fills a region.
-      if (std::abs(i - firstClickI) <= 1 && std::abs(j - firstClickJ) <= 1)
-        continue;
-      if (rand() % 5 == 0)
-        grid[i][j].isMine = true;
+      if (std::abs(i - firstClickI) > 1 || std::abs(j - firstClickJ) > 1)
+        candidates.emplace_back(i, j);
     }
+  }
+  // Place an exact number of mines: partial Fisher-Yates over the candidates.
+  const int available = static_cast<int>(candidates.size());
+  const int count = std::min(
+      mineCountFor(columns(), rows(), minePercent, available), available);
+  for (int k = 0; k < count; k++) {
+    const int pick = k + rand() % (available - k);
+    std::swap(candidates[k], candidates[pick]);
+    grid[candidates[k].first][candidates[k].second].isMine = true;
   }
   state = PLAYING;
   gameClock.restart();
