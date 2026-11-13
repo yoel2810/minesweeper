@@ -8,7 +8,9 @@ constexpr int MIN_BOARD_SIZE = 4;
 constexpr int MAX_BOARD_SIZE = 30;
 constexpr int DEFAULT_BOARD_SIZE = 12;
 constexpr int CELL_SIZE_PX = 32;
-constexpr int HEADER_H = 48;
+constexpr int HEADER_H = 64;
+// Space kept between the board and the window edges for the LCD bezel.
+constexpr int BOARD_PADDING = 24;
 
 inline std::optional<int> parseBoardDimension(const std::string &text) {
   if (text.empty() || text.size() > 2)
@@ -33,8 +35,8 @@ struct BoardLayout {
     const int viewportWidth = static_cast<int>(width);
     const int viewportHeight = static_cast<int>(height);
     const int size = std::min(
-        {CELL_SIZE_PX, viewportWidth / columns,
-         (viewportHeight - HEADER_H) / rows});
+        {CELL_SIZE_PX, (viewportWidth - 2 * BOARD_PADDING) / columns,
+         (viewportHeight - HEADER_H - 2 * BOARD_PADDING) / rows});
     return {(viewportWidth - columns * size) / 2,
             HEADER_H + (viewportHeight - HEADER_H - rows * size) / 2,
             size, columns, rows};

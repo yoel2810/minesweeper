@@ -15,6 +15,8 @@ public:
   bool isFirstClick = true;
   sf::Clock gameClock;
   float elapsedSeconds = 0.f;
+  int explodedColumn = -1; // mine that ended the game; -1 when none
+  int explodedRow = -1;
 
   int columns() const { return static_cast<int>(grid.size()); }
   int rows() const { return static_cast<int>(grid.front().size()); }

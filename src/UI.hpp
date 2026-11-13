@@ -2,12 +2,33 @@
 #include "Game.hpp"
 #include <SFML/Graphics.hpp>
 
+// "Pocket LCD" theme: a four-shade green reflective screen set in a plastic
+// handheld bezel, with magenta rubber buttons for the main actions.
+namespace Palette {
+inline const sf::Color Darkest{15, 56, 15};
+inline const sf::Color Dark{48, 98, 48};
+inline const sf::Color Light{139, 172, 15};
+inline const sf::Color Lightest{155, 188, 15};
+inline const sf::Color Body{201, 195, 182};
+inline const sf::Color Bezel{142, 136, 124};
+inline const sf::Color Rubber{163, 25, 91};
+inline const sf::Color RubberHover{138, 21, 77};
+inline const sf::Color RubberShadow{106, 16, 59};
+inline const sf::Color RubberText{244, 237, 228};
+} // namespace Palette
+
 struct Button {
-  sf::RectangleShape shape;
+  sf::RectangleShape shape; // hit area and geometry
   sf::Text text;
-  sf::Color normal = sf::Color(74, 144, 226);
-  sf::Color hover = sf::Color(53, 122, 189);
-  sf::Color pressed = sf::Color(40, 100, 160);
+  sf::Color normal = Palette::Rubber;
+  sf::Color hover = Palette::RubberHover;
+  sf::Color textColor = Palette::RubberText;
+  sf::Color outline = sf::Color::Transparent;
+  float outlineThickness = 0.f;
+  sf::Color shadow = Palette::RubberShadow; // transparent = no shadow
+  float shadowOffset = 4.f;
+  float radius = -1.f; // negative = fully rounded pill
+  bool hovered = false;
 
   Button() = delete;
   Button(sf::Font& font, const std::string& str, sf::Vector2f pos, sf::Vector2f size, unsigned int charSize = 18);
@@ -40,11 +61,18 @@ struct NumberField {
 };
 
 namespace UI {
+  // Button looks: magenta rubber key, filled LCD key, outlined LCD key.
+  void styleRubber(Button& b);
+  void styleScreenPrimary(Button& b);
+  void styleScreenSecondary(Button& b);
+
   void layoutControls(sf::Vector2u windowSize, Button& startButton,
                       NumberField& columns, NumberField& rows,
                       Button& hudRestartButton, Button& gameOverRestartButton,
                       Button& gameOverMenuButton, Button& gameWonAgainButton,
                       Button& gameWonMenuButton);
+  void drawDevice(sf::RenderWindow& w, bool withHudDivider);
+  void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game);
   void drawMenu(sf::RenderWindow& w, sf::Font& font, Button& startButton,
                 NumberField& columns, NumberField& rows, const std::string& error);
   void drawHUD(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton);

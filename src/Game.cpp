@@ -11,6 +11,7 @@ bool Game::start(int newColumns, int newRows) {
   isFirstClick = true;
   gameClock.restart();
   elapsedSeconds = 0.f;
+  explodedColumn = explodedRow = -1;
   return true;
 }
 
@@ -27,6 +28,7 @@ void Game::resetGame(int firstClickI, int firstClickJ) {
   state = PLAYING;
   gameClock.restart();
   elapsedSeconds = 0.f;
+  explodedColumn = explodedRow = -1;
 
   for (int i = 0; i < columns(); i++) {
     for (int j = 0; j < rows(); j++) {
@@ -60,6 +62,8 @@ void Game::openCells(int i, int j) {
   if (grid[i][j].isMine) {
     std::cout << "GAME OVER" << std::endl;
     state = GAME_OVER;
+    explodedColumn = i;
+    explodedRow = j;
     revealAllMines();
     return;
   }
@@ -111,6 +115,7 @@ void Game::toMenu() {
   state = MENU;
   isFirstClick = true;
   elapsedSeconds = 0.f;
+  explodedColumn = explodedRow = -1;
 }
 
 int Game::flagCount() const {

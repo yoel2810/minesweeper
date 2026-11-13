@@ -39,7 +39,7 @@ int main() {
   movableField.setPosition({70.f, 90.f});
   require(movableField.shape.getPosition() == sf::Vector2f(70.f, 90.f) &&
               movableField.label.getPosition() == sf::Vector2f(70.f, 65.f) &&
-              movableField.text.getPosition() == sf::Vector2f(82.f, 94.f),
+              movableField.text.getPosition() == sf::Vector2f(82.f, 85.f),
           "Moving a number field separated its parts");
 
   Button startButton(font, "Start", {0.f, 0.f}, {200.f, 50.f});
@@ -64,7 +64,7 @@ int main() {
                 layoutRows.shape.getPosition() ==
                     sf::Vector2f(centerX + 20.f, centerY - 70.f),
             "Menu fields are not centered after resize");
-    require(hudButton.shape.getPosition() == sf::Vector2f(centerX - 16.f, 8.f),
+    require(hudButton.shape.getPosition() == sf::Vector2f(centerX - 16.f, 20.f),
             "HUD button is not centered after resize");
     require(overRestart.shape.getPosition() ==
                     sf::Vector2f(centerX - 100.f, centerY + 10.f) &&

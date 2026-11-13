@@ -3,63 +3,13 @@
 #include "Game.hpp"
 #include "UI.hpp"
 #include <SFML/Graphics.hpp>
-#include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics/Sprite.hpp>
-#include <SFML/Graphics/Texture.hpp>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 #include <iostream>
 #include <optional>
-#include <unordered_map>
-
-std::unordered_map<std::string, sf::Texture> cellTexturesDictionary = {
-    {"default", sf::Texture("assets/images/default.png")},
-    {"flag", sf::Texture("assets/images/flag.png")},
-    {"mine", sf::Texture("assets/images/mine.png")},
-    {"0", sf::Texture("assets/images/empty0.png")},
-    {"1", sf::Texture("assets/images/empty1.png")},
-    {"2", sf::Texture("assets/images/empty2.png")},
-    {"3", sf::Texture("assets/images/empty3.png")},
-    {"4", sf::Texture("assets/images/empty4.png")},
-    {"5", sf::Texture("assets/images/empty5.png")},
-    {"6", sf::Texture("assets/images/empty6.png")},
-    {"7", sf::Texture("assets/images/empty7.png")},
-    {"8", sf::Texture("assets/images/empty8.png")}};
-
-void renderBoard(sf::RenderWindow &window, Game &game) {
-  sf::Sprite sprite = sf::Sprite(cellTexturesDictionary["default"]);
-  const auto size = window.getSize();
-  const auto layout =
-      BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
-  for (int i = 0; i < game.columns(); i++) {
-    for (int j = 0; j < game.rows(); j++) {
-      if (game.grid[i][j].isRevealed) {
-        if (game.grid[i][j].isMine)
-          sprite.setTexture(cellTexturesDictionary["mine"]);
-        else if (game.grid[i][j].isFlag)
-          sprite.setTexture(cellTexturesDictionary["flag"]);
-        else
-          sprite.setTexture(cellTexturesDictionary[std::to_string(
-              game.grid[i][j].minesCount)]);
-      } else {
-        if (game.grid[i][j].isFlag)
-          sprite.setTexture(cellTexturesDictionary["flag"]);
-        else
-          sprite.setTexture(cellTexturesDictionary["default"]);
-      }
-      const auto textureSize = sprite.getTexture().getSize();
-      sprite.setScale({static_cast<float>(layout.cellSize) / textureSize.x,
-                       static_cast<float>(layout.cellSize) / textureSize.y});
-      sprite.setPosition(
-          sf::Vector2f(static_cast<float>(i * layout.cellSize + layout.x),
-                       static_cast<float>(j * layout.cellSize + layout.y)));
-      window.draw(sprite);
-    }
-  }
-}
 
 int main() {
   sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper",
@@ -69,8 +19,8 @@ int main() {
   DisplaySettings displaySettings;
 
   sf::Font font;
-  if (!font.openFromFile("assets/fonts/DejaVuSans.ttf")) {
-    std::cerr << "Failed to load font assets/fonts/DejaVuSans.ttf\n";
+  if (!font.openFromFile("assets/fonts/VT323-Regular.ttf")) {
+    std::cerr << "Failed to load font assets/fonts/VT323-Regular.ttf\n";
     return 1;
   }
 
@@ -78,8 +28,11 @@ int main() {
   game.toMenu();
 
   // Create buttons
-  Button menuStartButton(font, "Start Game", sf::Vector2f(220.f, 275.f),
-                         sf::Vector2f(200.f, 50.f), 20);
+  // The pixel font should stay crisp rather than being filtered.
+  font.setSmooth(false);
+
+  Button menuStartButton(font, "START GAME", sf::Vector2f(220.f, 275.f),
+                         sf::Vector2f(200.f, 50.f), 30);
   NumberField columnsField(font, "Columns", {180.f, 190.f});
   NumberField rowsField(font, "Rows", {340.f, 190.f});
   std::string sizeError;
@@ -95,23 +48,23 @@ int main() {
     columnsField.focus(false);
     rowsField.focus(false);
   };
-  Button hudRestartButton(font, "R", sf::Vector2f(304.f, 8.f),
-                          sf::Vector2f(32.f, 32.f), 18);
-  Button gameOverRestartButton(font, "Restart", sf::Vector2f(220.f, 240.f),
-                               sf::Vector2f(200.f, 42.f), 18);
-  Button gameOverMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f),
-                            sf::Vector2f(200.f, 42.f), 18);
-  gameOverMenuButton.normal = sf::Color(90, 90, 90);
-  gameOverMenuButton.hover = sf::Color(70, 70, 70);
-  gameOverMenuButton.shape.setFillColor(gameOverMenuButton.normal);
-
-  Button gameWonAgainButton(font, "Play Again", sf::Vector2f(220.f, 240.f),
-                            sf::Vector2f(200.f, 42.f), 18);
-  Button gameWonMenuButton(font, "Menu", sf::Vector2f(220.f, 292.f),
-                           sf::Vector2f(200.f, 42.f), 18);
-  gameWonMenuButton.normal = sf::Color(90, 90, 90);
-  gameWonMenuButton.hover = sf::Color(70, 70, 70);
-  gameWonMenuButton.shape.setFillColor(gameWonMenuButton.normal);
+  Button hudRestartButton(font, "R", sf::Vector2f(304.f, 20.f),
+                          sf::Vector2f(32.f, 32.f), 26);
+  hudRestartButton.shadowOffset = 3.f;
+  Button gameOverRestartButton(font, "RESTART", sf::Vector2f(220.f, 240.f),
+                               sf::Vector2f(200.f, 42.f), 28);
+  Button gameOverMenuButton(font, "MENU", sf::Vector2f(220.f, 292.f),
+                            sf::Vector2f(200.f, 42.f), 28);
+  Button gameWonAgainButton(font, "PLAY AGAIN", sf::Vector2f(220.f, 240.f),
+                            sf::Vector2f(200.f, 42.f), 28);
+  Button gameWonMenuButton(font, "MENU", sf::Vector2f(220.f, 292.f),
+                           sf::Vector2f(200.f, 42.f), 28);
+  UI::styleRubber(menuStartButton);
+  UI::styleRubber(hudRestartButton);
+  UI::styleScreenPrimary(gameOverRestartButton);
+  UI::styleScreenSecondary(gameOverMenuButton);
+  UI::styleScreenPrimary(gameWonAgainButton);
+  UI::styleScreenSecondary(gameWonMenuButton);
 
   UI::layoutControls(window.getSize(), menuStartButton, columnsField,
                      rowsField, hudRestartButton, gameOverRestartButton,
@@ -305,17 +258,18 @@ int main() {
       game.toMenu();
     }
 
-    window.clear(sf::Color(180, 180, 180));
-    renderBoard(window, game);
-
-    // Always draw HUD (header) on top of board background
-    UI::drawHUD(window, font, game, hudRestartButton);
+    window.clear(Palette::Body);
+    UI::drawDevice(window, game.state != MENU);
 
     if (game.state == MENU) {
-      drawOverlay(window, sf::Color(180, 180, 180, 180));
-      // Re-draw board dimmed? overlay already dims, just draw menu
+      // The menu is a boot screen: no board or HUD behind it.
       UI::drawMenu(window, font, menuStartButton, columnsField, rowsField, sizeError);
-    } else if (game.state == GAME_OVER) {
+    } else {
+      UI::drawHUD(window, font, game, hudRestartButton);
+      UI::drawBoard(window, font, game);
+    }
+
+    if (game.state == GAME_OVER) {
       UI::drawGameOver(window, font, game, gameOverRestartButton,
                        gameOverMenuButton);
     } else if (game.state == GAME_WON) {

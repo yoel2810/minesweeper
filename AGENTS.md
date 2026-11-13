@@ -3,14 +3,14 @@
 ## Build & Run (Windows / MSYS2 UCRT64)
 - Configure: `cmake -S . -B build -G Ninja`
 - Build: `cmake --build build`
-- Run from repo root: `./build/bin/minesweeper.exe` — `src/main.cpp:22-34` loads `assets/images/*.png` via relative path; fails if cwd != repo root
+- Run from repo root: `./build/bin/minesweeper.exe` — loads `assets/fonts/VT323-Regular.ttf` via relative path; fails if cwd != repo root
 - Toolchain: `C:/msys64/ucrt64/bin/c++.exe`, C++17 (`CMakeLists.txt:17`), `CMAKE_EXPORT_COMPILE_COMMANDS ON` (`CMakeLists.txt:4`), Ninja generator
 - SFML 3.1.0 via `FetchContent` (`CMakeLists.txt:8-14`, `SFML::Graphics`) — first configure fetches from network and is slow; `CMAKE_RUNTIME_OUTPUT_DIRECTORY` is `build/bin` (`CMakeLists.txt:5`)
 
 ## Project Structure
 - `src/main.cpp:1-207` — entrypoint, SFML window loop (`640x480`, 60fps), `GameState { MENU, PLAYING, GAME_OVER, GAME_WON }`, global `Cell grid[GRID_SIZE][GRID_SIZE]`, input/render/win logic
 - `src/Cell.hpp` / `src/Cell.cpp` — `Cell { minesCount, isRevealed, isMine, isFlag }`
-- `assets/images/` + `assets/fonts/` — runtime assets; `build/`, `.cache/`, `.clangd` index are gitignored
+- `assets/fonts/VT323-Regular.ttf` (OFL, license alongside) is the only runtime asset — all visuals are SFML shapes drawn in `src/UI.cpp` ("Pocket LCD" theme, colors in `Palette` in `src/UI.hpp`); `assets/images/*.png` are legacy and unused; `build/`, `.cache/`, `.clangd` index are gitignored
 - Single target `minesweeper` (`CMakeLists.txt:16`); no tests, lint, formatter, or CI
 
 ## Gotchas & Conventions
