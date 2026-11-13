@@ -63,25 +63,31 @@ inline std::optional<int> parseMinePercent(const std::string &text) {
   return parseTwoDigitNumber(text, MIN_MINE_PERCENT, MAX_MINE_PERCENT);
 }
 
-// Mines placed on a board: the percentage of all cells, rounded, at least
-// one, and never more than the cells outside the safe first-click area.
-inline int mineCountFor(int columns, int rows, int minePercent,
-                        int availableCells) {
-  const int wanted = (columns * rows * minePercent + 50) / 100;
-  return std::clamp(wanted, 1, std::max(1, availableCells));
+// Cells kept mine-free around the first click: the click and its neighbours.
+constexpr int SAFE_OPENING_CELLS = 9;
+
+// Mines placed on a board: the percentage of all cells, rounded, at least one,
+// and never more than the cells outside the largest possible safe opening.
+// It does not depend on where the first click lands, so the HUD can show the
+// count before any mine is placed.
+inline int mineCountFor(int columns, int rows, int minePercent) {
+  const int cells = columns * rows;
+  const int wanted = (cells * minePercent + 50) / 100;
+  return std::clamp(wanted, 1, std::max(1, cells - SAFE_OPENING_CELLS));
 }
 
 struct BoardLayout {
   int x, y, cellSize, columns, rows;
 
-  // Dimensions have already been validated by Game::start.
+  // Dimensions have already been validated by Game::start. The cell size
+  // never drops below 1 px, so cellAt cannot divide by zero.
   static BoardLayout fit(int columns, int rows, unsigned int width,
                          unsigned int height) {
     const int viewportWidth = static_cast<int>(width);
     const int viewportHeight = static_cast<int>(height);
-    const int size = std::min(
-        {CELL_SIZE_PX, (viewportWidth - 2 * BOARD_PADDING) / columns,
-         (viewportHeight - HEADER_H - 2 * BOARD_PADDING) / rows});
+    const int size = std::max(
+        1, std::min({CELL_SIZE_PX, (viewportWidth - 2 * BOARD_PADDING) / columns,
+                     (viewportHeight - HEADER_H - 2 * BOARD_PADDING) / rows}));
     return {(viewportWidth - columns * size) / 2,
             HEADER_H + (viewportHeight - HEADER_H - rows * size) / 2,
             size, columns, rows};

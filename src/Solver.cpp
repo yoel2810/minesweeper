@@ -1,5 +1,6 @@
 #include "Solver.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <numeric>
 #include <set>
@@ -15,6 +16,19 @@ Poly convolve(const Poly &a, const Poly &b) {
     if (a[i] != 0)
       for (std::size_t j = 0; j < b.size(); j++)
         out[i + j] += a[i] * b[j];
+  return out;
+}
+
+// Which mine counts are possible at all (1) - the nonzero pattern of a Poly.
+using Support = std::vector<char>;
+
+Support convolveSupport(const Support &a, const Support &b) {
+  Support out(a.size() + b.size() - 1, 0);
+  for (std::size_t i = 0; i < a.size(); i++)
+    if (a[i])
+      for (std::size_t j = 0; j < b.size(); j++)
+        if (b[j])
+          out[i + j] = 1;
   return out;
 }
 
@@ -115,6 +129,20 @@ int Solver::Snapshot::flagCount() const {
 
 Solver::Solver(Game &currentGame) : game(currentGame) {}
 
+void Solver::syncWithGame() {
+  if (trackedGame == game.gameNumber())
+    return;
+  trackedGame = game.gameNumber();
+  history.clear();
+  guesses = 0;
+  provenFlags.clear();
+}
+
+bool Solver::isProvenFlag(int column, int row) const {
+  return trackedGame == game.gameNumber() &&
+         provenFlags.count(std::make_pair(column, row)) > 0;
+}
+
 Solver::Snapshot Solver::snapshot() const {
   Snapshot s;
   s.columns = game.columns();
@@ -124,33 +152,20 @@ Solver::Snapshot Solver::snapshot() const {
   s.number.assign(s.size(), 0);
   for (int c = 0; c < s.columns; c++)
     for (int r = 0; r < s.rows; r++) {
-      const Cell &cell = game.grid[c][r];
+      const Cell &cell = game.cell(c, r);
       const int id = s.id(c, r);
       if (cell.isRevealed) {
         s.view[id] = CellView::Revealed;
         s.number[id] = cell.minesCount;
-      } else if (cell.isFlag) {
+      } else if (cell.isFlag && isProvenFlag(c, r)) {
+        // A player's flag may be wrong, so only proven flags count; the
+        // others are treated as unknown cells.
         s.view[id] = CellView::Flagged;
       }
     }
   return s;
 }
 
-// ---------------------------------------------------------------- Step 0
-
-bool Solver::stepFirstClick(const Snapshot &s) {
-  if (std::any_of(s.view.begin(), s.view.end(),
-                  [](CellView v) { return v == CellView::Revealed; }))
-    return false;
-  history.clear();
-  guesses = 0;
-  if (game.isFirstClick) { // mines are placed lazily on the first click
-    game.resetGame(0, 0);
-    game.isFirstClick = false;
-  }
-  reveal(0, 0, Step::FirstClick, false);
-  return true;
-}
 
 // ---------------------------------------------------------------- Step 1
 
@@ -200,14 +215,19 @@ Solver::Deductions Solver::stepSubsetRule(const Snapshot &s) {
   std::set<Constraint> known(cs.begin(), cs.end());
   std::set<int> safe, mines;
 
-  bool changed = true;
-  while (changed) {
-    changed = false;
-    for (std::size_t i = 0; i < cs.size(); i++) {
-      for (std::size_t j = 0; j < cs.size(); j++) {
-        if (i == j)
+  // Each pass pairs every constraint with every other, except pairs of two
+  // constraints that an earlier pass already compared. Derived constraints
+  // are collected separately and appended after the pass, so references into
+  // `cs` stay valid without copying.
+  std::size_t firstNew = 0;
+  while (firstNew < cs.size()) {
+    const std::size_t count = cs.size();
+    std::vector<Constraint> derived;
+    for (std::size_t i = 0; i < count; i++) {
+      for (std::size_t j = 0; j < count; j++) {
+        if (i == j || (i < firstNew && j < firstNew))
           continue;
-        const Constraint a = cs[i], b = cs[j]; // copies: cs may grow below
+        const Constraint &a = cs[i], &b = cs[j];
         if (a.cells.size() >= b.cells.size() ||
             !std::includes(b.cells.begin(), b.cells.end(), a.cells.begin(),
                            a.cells.end()))
@@ -222,13 +242,14 @@ Solver::Deductions Solver::stepSubsetRule(const Snapshot &s) {
           safe.insert(d.cells.begin(), d.cells.end());
         } else if (d.mines == static_cast<int>(d.cells.size())) {
           mines.insert(d.cells.begin(), d.cells.end());
-        } else if (cs.size() < MAX_DERIVED_CONSTRAINTS &&
+        } else if (count + derived.size() < MAX_DERIVED_CONSTRAINTS &&
                    known.insert(d).second) { // skip duplicates
-          cs.push_back(d);
-          changed = true;
+          derived.push_back(std::move(d));
         }
       }
     }
+    firstNew = count;
+    std::move(derived.begin(), derived.end(), std::back_inserter(cs));
   }
   return {{safe.begin(), safe.end()}, {mines.begin(), mines.end()}};
 }
@@ -398,63 +419,107 @@ Solver::Probabilities Solver::computeProbabilities(const Snapshot &s,
     }
   }
 
-  // C(interior, k) for all k.
-  Poly binom(interior + 1, 1.0L);
-  for (int k = 0; k < interior; k++)
-    binom[k + 1] = binom[k] * (interior - k) / (k + 1);
-
+  // Raw counts overflow quickly: C(900, 450) is about 1e269, and products of
+  // component solution counts grow without bound. `long double` is only a
+  // double on MSVC, so all weights are kept scaled:
+  //  - each component's counts are divided by its total (only ratios matter),
+  //  - interior binomials are taken in log space relative to their maximum.
+  // Whether a configuration is possible at all is tracked separately as a
+  // boolean "support", so underflow can never fake a certainty.
   std::vector<Poly> polys;
-  for (std::size_t k : exact)
-    polys.push_back(f.solutions[k].ways);
+  std::vector<Support> supports;
+  for (std::size_t k : exact) {
+    const ComponentSolutions &sol = f.solutions[k];
+    Poly p(sol.ways.size());
+    Support sp(sol.ways.size());
+    for (std::size_t m = 0; m < p.size(); m++) {
+      p[m] = sol.ways[m] / sol.total;
+      sp[m] = sol.ways[m] > 0;
+    }
+    polys.push_back(std::move(p));
+    supports.push_back(std::move(sp));
+  }
   Poly total{1.0L};
-  for (const Poly &p : polys)
-    total = convolve(total, p);
+  Support totalSupport{1};
+  for (std::size_t k = 0; k < polys.size(); k++) {
+    total = convolve(total, polys[k]);
+    totalSupport = convolveSupport(totalSupport, supports[k]);
+  }
 
   // Weight of a global frontier-mine count m: the number of ways to place the
-  // remaining mines in the interior.
-  bool useGlobal = true;
+  // remaining mines in the interior, C(interior, remaining - m), scaled.
+  std::vector<long double> logBinom(interior + 1, 0.0L);
+  for (int k = 0; k <= interior; k++)
+    logBinom[k] = std::lgamma(interior + 1.0L) - std::lgamma(k + 1.0L) -
+                  std::lgamma(interior - k + 1.0L);
+  auto fits = [&](int m) { // remaining - m mines fit in the interior
+    const int k = remaining - m;
+    return k >= 0 && k <= interior;
+  };
+  bool useGlobal = false;
+  long double logMax = 0;
+  for (std::size_t m = 0; m < totalSupport.size(); m++) {
+    const int mi = static_cast<int>(m);
+    if (!totalSupport[m] || !fits(mi))
+      continue;
+    const long double lb = logBinom[remaining - mi];
+    logMax = useGlobal ? std::max(logMax, lb) : lb;
+    useGlobal = true;
+  }
+  // No consistent total (e.g. the board contradicts the count): ignore it.
+  pr.usedGlobalCount = useGlobal;
+  auto possible = [&](int m) { return !useGlobal || fits(m); };
   auto weight = [&](int m) -> long double {
     if (!useGlobal)
       return 1.0L;
-    const int k = remaining - m;
-    return (k < 0 || k > interior) ? 0.0L : binom[k];
+    return fits(m) ? std::exp(logBinom[remaining - m] - logMax) : 0.0L;
   };
-  long double z = 0;
-  for (std::size_t m = 0; m < total.size(); m++)
-    z += total[m] * weight(static_cast<int>(m));
-  if (z <= 0)
-    useGlobal = false; // inconsistent total (e.g. wrong user flags): ignore it
-  pr.usedGlobalCount = useGlobal;
 
   for (std::size_t e = 0; e < exact.size(); e++) {
     Poly others{1.0L};
+    Support othersSupport{1};
     for (std::size_t o = 0; o < exact.size(); o++)
-      if (o != e)
+      if (o != e) {
         others = convolve(others, polys[o]);
+        othersSupport = convolveSupport(othersSupport, supports[o]);
+      }
     const ComponentSolutions &sol = f.solutions[exact[e]];
-    // inner[m]: weighted count of the rest of the board given m mines here
+    // inner[m]: scaled weight of the rest of the board given m mines here;
+    // innerPossible[m]: whether the rest of the board can take m mines here.
     Poly inner(sol.ways.size(), 0.0L);
+    Support innerPossible(sol.ways.size(), 0);
     for (std::size_t m = 0; m < sol.ways.size(); m++) {
       if (sol.ways[m] == 0)
         continue;
-      for (std::size_t t = 0; t < others.size(); t++)
-        inner[m] += others[t] * weight(static_cast<int>(m + t));
+      for (std::size_t t = 0; t < others.size(); t++) {
+        const int mt = static_cast<int>(m + t);
+        inner[m] += others[t] * weight(mt);
+        if (othersSupport[t] && possible(mt))
+          innerPossible[m] = 1;
+      }
     }
     const Component &comp = f.components[exact[e]];
     for (std::size_t j = 0; j < comp.cells.size(); j++) {
       long double asMine = 0, asSafe = 0;
+      bool minePossible = false, safePossible = false;
       for (std::size_t m = 0; m < sol.ways.size(); m++) {
         if (sol.ways[m] == 0)
           continue;
         const long double mineHere = sol.mineWays[m][j];
-        asMine += mineHere * inner[m];
-        asSafe += (sol.ways[m] - mineHere) * inner[m];
+        const long double safeHere = sol.ways[m] - mineHere;
+        asMine += mineHere / sol.total * inner[m];
+        asSafe += safeHere / sol.total * inner[m];
+        minePossible |= innerPossible[m] && mineHere > 0;
+        safePossible |= innerPossible[m] && safeHere > 0;
       }
       const int cell = comp.cells[j];
       const long double both = asMine + asSafe;
-      pr.mineProb[cell] = both > 0 ? static_cast<double>(asMine / both) : 0.5;
-      pr.certainSafe[cell] = useGlobal && asMine == 0 && asSafe > 0;
-      pr.certainMine[cell] = useGlobal && asSafe == 0 && asMine > 0;
+      pr.mineProb[cell] = both > 0 ? static_cast<double>(asMine / both)
+                          : minePossible == safePossible ? 0.5
+                          : minePossible                 ? 1.0
+                                                         : 0.0;
+      pr.certainSafe[cell] = useGlobal && !minePossible && safePossible;
+      pr.certainMine[cell] = useGlobal && !safePossible && minePossible;
     }
   }
 
@@ -462,14 +527,15 @@ Solver::Probabilities Solver::computeProbabilities(const Snapshot &s,
     long double zi = 0, expected = 0;
     bool anyMine = false, anySafe = false;
     for (std::size_t m = 0; m < total.size(); m++) {
-      const long double w = total[m] * weight(static_cast<int>(m));
-      if (w <= 0)
+      const int mi = static_cast<int>(m);
+      if (!totalSupport[m] || !possible(mi))
         continue;
-      const int inInterior = remaining - static_cast<int>(m);
-      zi += w;
-      expected += w * inInterior;
+      const int inInterior = remaining - mi;
       anyMine |= inInterior > 0;
       anySafe |= inInterior < interior;
+      const long double w = total[m] * weight(mi);
+      zi += w;
+      expected += w * inInterior;
     }
     if (useGlobal && zi > 0) {
       pr.interiorProb = static_cast<double>(expected / zi / interior);
@@ -524,28 +590,32 @@ Solver::GuessResult Solver::stepGuess(const Snapshot &s, const Frontier &f) {
 // ---------------------------------------------------------------- Driver
 
 void Solver::reveal(int column, int row, Step step, bool guess) {
+  // The solver ignores player flags it has not proven, so a cell it decides
+  // to open may still carry one: lift it first.
+  if (game.cell(column, row).isFlag)
+    game.toggleFlag(column, row);
   history.push_back({column, row, false, step, guess});
-  game.openCells(column, row);
-  game.checkAndHandleWin();
+  game.reveal(column, row);
 }
 
-int Solver::apply(const Deductions &d, Step step) {
+int Solver::applyDeductions(const Deductions &d, Step step) {
   int changes = 0;
   const Snapshot s = snapshot();
   for (int id : d.mines) {
     const int c = s.column(id), r = s.row(id);
-    if (game.grid[c][r].isFlag || game.grid[c][r].isRevealed)
+    if (game.cell(c, r).isRevealed || isProvenFlag(c, r))
       continue;
-    game.toggleFlag(c, r);
+    if (!game.cell(c, r).isFlag) // a player flag here is now proven: keep it
+      game.toggleFlag(c, r);
+    provenFlags.insert({c, r});
     history.push_back({c, r, true, step, false});
     changes++;
   }
   for (int id : d.safe) {
-    if (game.state != PLAYING)
+    if (game.state() != GameState::PLAYING)
       break;
     const int c = s.column(id), r = s.row(id);
-    const Cell &cell = game.grid[c][r];
-    if (cell.isFlag || cell.isRevealed) // an earlier flood fill got it
+    if (game.cell(c, r).isRevealed) // an earlier flood fill got it
       continue;
     reveal(c, r, step, false);
     changes++;
@@ -553,58 +623,101 @@ int Solver::apply(const Deductions &d, Step step) {
   return changes;
 }
 
-bool Solver::playTurn() {
-  if (game.state != PLAYING)
-    return false;
-  const Snapshot s = snapshot();
-  if (stepFirstClick(s))
-    return true;
-  if (apply(stepBasicRules(s), Step::Basic) > 0)
-    return true;
-  if (apply(stepSubsetRule(s), Step::Subset) > 0)
-    return true;
+Solver::Plan Solver::plan(const Snapshot &s) {
+  Plan p;
+  // Step 0: an untouched board (nothing revealed yet) opens a corner.
+  if (std::none_of(s.view.begin(), s.view.end(),
+                   [](CellView v) { return v == CellView::Revealed; })) {
+    p.step = Step::FirstClick;
+    return p;
+  }
+  // Steps 1-3 in order; the first one that proves something wins. Every
+  // deduced cell is unknown in `s`, so a non-empty result always acts.
+  p.step = Step::Basic;
+  p.deductions = stepBasicRules(s);
+  if (!p.deductions.empty())
+    return p;
+  p.step = Step::Subset;
+  p.deductions = stepSubsetRule(s);
+  if (!p.deductions.empty())
+    return p;
   const Frontier f = analyzeFrontier(s);
-  if (apply(stepExhaustiveSearch(f), Step::Search) > 0)
+  p.step = Step::Search;
+  p.deductions = stepExhaustiveSearch(f);
+  if (!p.deductions.empty())
+    return p;
+  // Step 5: certainties only the mine total proves, else the best guess.
+  GuessResult g = stepGuess(s, f);
+  p.step = Step::Guess;
+  p.deductions = std::move(g.certain);
+  if (p.deductions.empty())
+    p.guess = g.cell;
+  return p;
+}
+
+bool Solver::applyPlan(const Plan &p) {
+  syncWithGame();
+  if (game.state() != GameState::PLAYING)
+    return false;
+  if (p.step == Step::FirstClick) {
+    if (game.minesPlaced())
+      return false;
+    reveal(0, 0, Step::FirstClick, false); // the first click is always safe
     return true;
-  const GuessResult g = stepGuess(s, f);
-  if (apply(g.certain, Step::Guess) > 0) // proven by the mine total: no guess
+  }
+  if (applyDeductions(p.deductions, p.step) > 0)
     return true;
-  if (g.cell >= 0) {
+  if (p.guess >= 0) {
+    const int rows = game.rows();
     guesses++;
-    reveal(s.column(g.cell), s.row(g.cell), Step::Guess, true);
+    reveal(p.guess / rows, p.guess % rows, Step::Guess, true);
     return true;
   }
   return false;
 }
 
-namespace {
-// First cell in `ids` that is still unrevealed and unflagged, or -1.
-int firstUnknown(const std::vector<int> &ids, const Solver::Snapshot &s) {
-  for (int id : ids)
-    if (s.view[id] == Solver::CellView::Unknown)
-      return id;
-  return -1;
+bool Solver::playTurn() {
+  syncWithGame();
+  if (game.state() != GameState::PLAYING)
+    return false;
+  return applyPlan(plan(snapshot()));
 }
-} // namespace
 
-int Solver::stepHint(const Snapshot &s) {
-  if (int id = firstUnknown(stepBasicRules(s).safe, s); id >= 0)
+std::vector<char> Solver::flaggedCells() const {
+  std::vector<char> flagged(game.columns() * game.rows(), 0);
+  for (int c = 0; c < game.columns(); c++)
+    for (int r = 0; r < game.rows(); r++)
+      flagged[c * game.rows() + r] = game.cell(c, r).isFlag;
+  return flagged;
+}
+
+int Solver::stepHint(const Snapshot &s, const std::vector<char> &skip) {
+  // First cell in `ids` that is unknown and not skipped, or -1.
+  auto first = [&](const std::vector<int> &ids) {
+    for (int id : ids)
+      if (s.view[id] == CellView::Unknown && (skip.empty() || !skip[id]))
+        return id;
+    return -1;
+  };
+  if (int id = first(stepBasicRules(s).safe); id >= 0)
     return id;
-  if (int id = firstUnknown(stepSubsetRule(s).safe, s); id >= 0)
+  if (int id = first(stepSubsetRule(s).safe); id >= 0)
     return id;
   const Frontier f = analyzeFrontier(s);
-  if (int id = firstUnknown(stepExhaustiveSearch(f).safe, s); id >= 0)
+  if (int id = first(stepExhaustiveSearch(f).safe); id >= 0)
     return id;
-  return firstUnknown(stepGuess(s, f).certain.safe, s);
+  return first(stepGuess(s, f).certain.safe);
 }
 
 std::optional<std::pair<int, int>> Solver::findHint() const {
-  if (game.state != PLAYING)
+  if (game.state() != GameState::PLAYING)
     return std::nullopt;
-  if (game.isFirstClick)
-    return std::make_pair(0, 0);
+  if (!game.minesPlaced())
+    return std::make_pair(0, 0); // the first click is always safe
   const Snapshot s = snapshot();
-  const int id = stepHint(s);
+  // Deductions ignore unproven player flags, but the hint should not point at
+  // a flagged cell the player cannot click.
+  const int id = stepHint(s, flaggedCells());
   if (id < 0)
     return std::nullopt;
   return std::make_pair(s.column(id), s.row(id));
@@ -613,5 +726,6 @@ std::optional<std::pair<int, int>> Solver::findHint() const {
 Solver::SolveResult Solver::solve() {
   while (playTurn()) {
   }
-  return {game.state == GAME_WON, guesses, static_cast<int>(history.size())};
+  return {game.state() == GameState::GAME_WON, guesses,
+          static_cast<int>(history.size())};
 }

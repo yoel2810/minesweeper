@@ -6,3 +6,5 @@ out
 .vs
 .vscode
 build-vs
+CMakeCache.txt
+CMakeFiles/

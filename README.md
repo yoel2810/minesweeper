@@ -72,8 +72,14 @@ The first configure downloads SFML 3.1.0 and requires an internet connection;
 it can take a while. For subsequent runs, you can skip the configure command
 unless the build configuration changes.
 
-Always launch from the project root, not `build/bin`, so the game can find
-`assets/images/` and `assets/fonts/`.
+The game finds `assets/fonts/` next to the executable or in the repository
+above `build/bin` (or `build-vs/bin/<Config>`), so it can be launched from
+any directory. Single-config builds (Ninja) default to `Release`; pass
+`-DCMAKE_BUILD_TYPE=Debug` to the configure command for a debug build.
+
+Run the tests with `ctest --test-dir build`. `build/bin/solver_bench.exe
+[columns rows games [seed [minePercent]]]` plays the solver on random boards
+and reports wins, guesses and the slowest turn.
 
 The window can be resized by dragging its border. Press `F11` while playing
 or from a menu to toggle fullscreen; press `F11` again to restore the previous

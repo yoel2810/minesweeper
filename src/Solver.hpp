@@ -2,6 +2,7 @@
 #include "Game.hpp"
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -9,7 +10,7 @@
 //
 // The solver only looks at information a human player sees: which cells are
 // revealed, their numbers, which cells are flagged, and the total mine count.
-// It acts through Game (openCells / toggleFlag / resetGame) and never changes
+// It acts through Game (reveal / toggleFlag), like a player, and never changes
 // the game rules. Every step is a function of an immutable Snapshot, so the
 // reasoning can be tested without a Game.
 class Solver {
@@ -31,6 +32,11 @@ public:
     int row(int id) const { return id % rows; }
     int neighbours(int id, int out[8]) const; // in-bounds 8-neighbourhood
     int flagCount() const;
+    bool operator==(const Snapshot &o) const {
+      return columns == o.columns && rows == o.rows &&
+             totalMines == o.totalMines && view == o.view && number == o.number;
+    }
+    bool operator!=(const Snapshot &o) const { return !(*this == o); }
   };
 
   // "Exactly `mines` mines among `cells`" (cells sorted ascending, all unknown).
@@ -108,18 +114,33 @@ public:
   std::vector<Move> history; // moves of the current game
   int guesses = 0;
 
+  // One turn's decision, computed from a Snapshot alone.
+  struct Plan {
+    Step step = Step::FirstClick;
+    Deductions deductions; // proven cells to flag / reveal
+    int guess = -1;        // cell id to guess when nothing is proven
+  };
+
   explicit Solver(Game &currentGame);
 
   // One decision: take the first step that finds something and apply it.
   // Returns false when the game is over or nothing can be done.
+  // Equivalent to applyPlan(plan(snapshot())).
   bool playTurn();
   // Run turns until the game is won or lost.
   SolveResult solve();
 
+  // The board as the solver sees it: unproven player flags count as unknown.
   Snapshot snapshot() const;
+  // Thinking half of a turn: pure, touches no shared state, so it can run on
+  // a worker thread while the game keeps drawing.
+  static Plan plan(const Snapshot &s);
+  // Acting half: applies `p` to the game. The caller must make sure the board
+  // still matches the snapshot the plan was made from. Returns true if it acted.
+  bool applyPlan(const Plan &p);
+  // flaggedCells()[id]: the cell carries a flag (the player's or the solver's).
+  std::vector<char> flaggedCells() const;
 
-  // Step 0. Clicks a corner on an untouched board. Returns true if it acted.
-  bool stepFirstClick(const Snapshot &s);
   // Step 1: R(X)==0 -> safe, R(X)==|U(X)| -> mines.
   static Deductions stepBasicRules(const Snapshot &s);
   // Step 2: subset rule with derived constraints.
@@ -129,7 +150,8 @@ public:
   // Step 5: probabilities and the best guess.
   static GuessResult stepGuess(const Snapshot &s, const Frontier &f);
   // Hint: first unrevealed cell provably safe (no guessing), or -1. Reads only.
-  static int stepHint(const Snapshot &s);
+  // Cells with skip[id] set are never returned (empty skip: none skipped).
+  static int stepHint(const Snapshot &s, const std::vector<char> &skip = {});
   // Hint for the live game: (column, row) of a proven-safe cell, or nullopt.
   // Before the first click the corner is returned, since it is always safe.
   std::optional<std::pair<int, int>> findHint() const;
@@ -148,6 +170,13 @@ public:
                                             const Frontier &f);
 
 private:
-  int apply(const Deductions &d, Step step);
+  // Flags the solver proved itself in the current game. A player's flag may
+  // be wrong, so snapshot() treats every other flag as an unknown cell.
+  std::set<std::pair<int, int>> provenFlags;
+  std::uint64_t trackedGame = 0; // Game::gameNumber() the state above is for
+
+  void syncWithGame(); // new game started: forget history, guesses, flags
+  bool isProvenFlag(int column, int row) const;
+  int applyDeductions(const Deductions &d, Step step);
   void reveal(int column, int row, Step step, bool guess);
 };

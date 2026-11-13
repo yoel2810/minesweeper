@@ -6,7 +6,9 @@ Each step is one function; the name in brackets is the C++ method.
 ## Definitions
 
 ```
-unknown cell     : not revealed and not flagged
+flagged cell     : flagged by the solver itself (a proven mine)
+unknown cell     : not revealed and not flagged -- includes cells carrying a
+                   player's flag, since a player's flag may be wrong
 U(X)             : unknown cells among the 8 neighbours of revealed number X
 R(X)             : number(X) - (flagged neighbours of X)       -- mines still hidden
 constraint       : (cells, mines)  "exactly `mines` mines in `cells`"
@@ -17,44 +19,43 @@ interior cell    : unknown cell adjacent to no revealed number
 U and R are recomputed from a fresh `Snapshot` of the game before every
 decision, so they are always current after any reveal or flag.
 
-## Main loop  [solve / playTurn]
+## Main loop  [solve / playTurn = applyPlan(plan(snapshot()))]
+
+A turn is split in two so the GUI can think on a worker thread: `plan` is a
+pure function of the snapshot, `applyPlan` changes the game.
 
 ```
 solve():
     while playTurn(): pass
     return (won?, guesses, moves)
 
-playTurn():                                   -- one decision; earliest step wins
-    if game is not PLAYING: return false
-    S = snapshot()
+plan(S):                                      -- one decision; earliest step wins
+    if no cell of S is revealed:                  return FirstClick -- Step 0
+    if stepBasicRules(S)        found any:        return it         -- Step 1
+    if stepSubsetRule(S)        found any:        return it         -- Step 2
+    F = analyzeFrontier(S)                                          -- Steps 3+4
+    if stepExhaustiveSearch(F)  found any:        return it
+    G = stepGuess(S, F)                                             -- Step 5
+    if G.certain                found any:        return it         -- proven by mine total
+    return guess G.cell (if any)
 
-    if stepFirstClick(S):                         return true      -- Step 0
-    if apply(stepBasicRules(S))        found any: return true      -- Step 1
-    if apply(stepSubsetRule(S))        found any: return true      -- Step 2
-    F = analyzeFrontier(S)                                         -- Steps 3+4
-    if apply(stepExhaustiveSearch(F))  found any: return true
-    G = stepGuess(S, F)                                            -- Step 5
-    if apply(G.certain)                found any: return true      -- proven by mine total
-    if G.cell exists:
-        reveal(G.cell); guesses += 1;             return true
-    return false
-
-apply(D):                       -- D = (safe cells, mine cells), all proven
-    for c in D.mines: flag c    unless already flagged/revealed
-    for c in D.safe : reveal c  unless already revealed/flagged (flood fill may have got it)
-    return number of changes
+applyPlan(P):                   -- P.deductions = (safe cells, mine cells), all proven
+    if new game started: forget history, guesses and proven flags
+    FirstClick: reveal corner (0,0)
+    for c in mines: flag c (or adopt the player's flag already on it) unless revealed
+    for c in safe : reveal c (lifting a wrong player flag) unless already revealed
+    guess     : reveal P.guess; guesses += 1
 ```
 
-After `apply` the loop restarts at Step 0/1, so every new reveal or flag is
-fed back through the cheapest rules first.
+After `applyPlan` the loop restarts at Step 0/1, so every new reveal or flag
+is fed back through the cheapest rules first.
 
-## Step 0: first click  [stepFirstClick]
+## Step 0: first click  [plan, Step::FirstClick]
 
 ```
 if no cell is revealed:
-    if the game has not placed mines yet:        -- lazy placement
-        game.resetGame(corner)                   -- game keeps corner + neighbours mine-free
-    reveal corner (0,0)
+    reveal corner (0,0)        -- Game places mines lazily, keeping the corner
+                               -- and its neighbours mine-free
 ```
 
 ## Step 1: basic rules  [stepBasicRules]
@@ -166,14 +167,25 @@ stepGuess:
     reveal it and count one guess
 ```
 
+Numerics: raw counts overflow a `double` (MSVC's `long double`) on big
+boards, so each component's `ways`/`mineWays` are divided by its own total and
+`weight(m)` is computed as `exp(log C(I, T - m) - max)` over the reachable `m`.
+Only ratios enter P(c), so the scaling cancels. "Certainly safe / mine" is
+decided from a separate boolean support (which mine counts are possible at
+all), never from a floating-point zero, so underflow cannot fake a proof.
+
 If the search ran out of budget for a component, its cells fall back to the
 average `R/|U|` of their constraints, and they are never used for proofs.
-If the mine total is inconsistent (e.g. wrong flags placed by a human), the
-global weighting is switched off and uniform weights are used.
+If the mine total is inconsistent with the board, the global weighting is
+switched off and uniform weights are used.
 
 ## Correctness rules
 
 * Flags are placed **only** on cells proven to be mines; a guess never flags.
+* Player flags are never trusted: they count as unknown cells until the
+  solver proves them (then adopted) or proves them wrong (then lifted and the
+  cell revealed). The hint follows the same rule, so a wrong flag cannot make
+  it point at a mine.
 * U contains only unknown cells (revealed and flagged cells are excluded).
 * U and R are rebuilt from a new snapshot after every action.
 * Derived constraints are differences of true constraints, deduplicated, so

@@ -44,7 +44,7 @@ Source: "..\assets\fonts\VT323-Regular.ttf"; DestDir: "{app}\assets\fonts"; Flag
 Source: "..\assets\fonts\VT323-OFL.txt"; DestDir: "{app}\assets\fonts"; Flags: ignoreversion
 
 [Icons]
-; WorkingDir is required: the game loads assets\fonts\ relative to the current directory.
+; The game finds assets\fonts\ next to its exe, so WorkingDir is not required; it is kept for tidiness.
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon

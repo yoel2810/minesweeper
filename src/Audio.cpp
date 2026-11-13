@@ -1,7 +1,7 @@
 #include "Audio.hpp"
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
+#include <random>
 #include <vector>
 
 namespace {
@@ -22,8 +22,11 @@ void addTone(Samples &out, float startHz, float endHz, int ms, float volume,
     float wave = square ? (phase < 0.5f ? 1.f : -1.f)
                         : std::sin(phase * 6.2831853f);
     if (noise > 0.f) {
-      const float n = static_cast<float>(std::rand()) / RAND_MAX * 2.f - 1.f;
-      wave = wave * (1.f - noise) + n * noise;
+      // A fixed seed: the noise only has to sound like noise, and the
+      // effects come out identical on every run.
+      static std::minstd_rand generator(12345);
+      static std::uniform_real_distribution<float> white(-1.f, 1.f);
+      wave = wave * (1.f - noise) + white(generator) * noise;
     }
     const float envelope = 1.f - t;
     out.push_back(static_cast<std::int16_t>(wave * envelope * volume * 32767.f));

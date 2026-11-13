@@ -2,6 +2,8 @@
 #include "BoardSettings.hpp"
 #include "DisplaySettings.hpp"
 #include "UI.hpp"
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -112,6 +114,35 @@ int main() {
             "Terminal controls are not centered after resize");
   }
 
+  {
+    // A resized button keeps its label centered.
+    Button resized(font, "OK", {10.f, 10.f}, {40.f, 20.f});
+    resized.setSize({200.f, 60.f});
+    const sf::FloatRect label = resized.text.getGlobalBounds();
+    const float labelCenter = label.position.x + label.size.x / 2.f;
+    require(std::abs(labelCenter - 110.f) <= 1.f,
+            "Resized button label is not centered");
+  }
+
+  {
+    // Hover only follows the buttons of the current screen; leaving a
+    // screen un-hovers its buttons.
+    Controls controls(font);
+    controls.relayout({640, 480});
+    const auto onHint = sf::Vector2i(controls.hudHint.shape.getPosition()) +
+                        sf::Vector2i(5, 5);
+    controls.updateHover(GameState::PLAYING, onHint);
+    require(controls.hudHint.hovered, "HUD button not hovered while playing");
+    controls.updateHover(GameState::MENU, onHint);
+    require(!controls.hudHint.hovered, "Hidden HUD button stayed hovered");
+  }
+
+  {
+    // A degenerate window still gives a usable cell size.
+    const auto tiny = BoardLayout::fit(30, 30, 10, 10);
+    require(tiny.cellSize >= 1, "Cell size dropped to zero");
+  }
+
   DisplaySettings display;
   display.toggle({900, 600});
   require(display.fullscreen && display.windowedSize == sf::Vector2u(900, 600) &&
@@ -164,16 +195,83 @@ int main() {
           std::tuple{10, 10, 20, 20}, std::tuple{30, 16, 21, 101},
           std::tuple{30, 30, 50, 450}, std::tuple{4, 4, 5, 1}}) {
       require(densityGame.start(columns, rows, percent), "Valid density rejected");
-      require(densityGame.minePercent == percent, "Density not stored");
-      densityGame.resetGame(0, 0);
+      require(densityGame.minePercent() == percent, "Density not stored");
+      require(densityGame.mineCount() == expected,
+              "Mine counter before the first click differs from the placed count");
+      densityGame.placeMines(0, 0);
       require(densityGame.mineCount() == expected, "Wrong number of mines placed");
-      require(!densityGame.grid[0][0].isMine && !densityGame.grid[1][1].isMine,
+      require(!densityGame.cell(0, 0).isMine && !densityGame.cell(1, 1).isMine,
               "Mine placed in the safe opening");
     }
-    // A tiny dense board caps mines at the cells outside the 3x3 opening.
-    require(densityGame.start(4, 4, 50), "Dense tiny board rejected");
-    densityGame.resetGame(1, 1);
-    require(densityGame.mineCount() == 7, "Dense board not capped to free cells");
+    // A tiny dense board caps mines at the cells outside a 3x3 opening, the
+    // same count wherever the first click lands.
+    for (const auto click : {std::pair{0, 0}, std::pair{1, 1}, std::pair{3, 0}}) {
+      require(densityGame.start(4, 4, 50), "Dense tiny board rejected");
+      require(densityGame.mineCount() == 7, "Dense board count not shown up front");
+      densityGame.placeMines(click.first, click.second);
+      require(densityGame.mineCount() == 7, "Dense board not capped to free cells");
+    }
+  }
+
+  {
+    // Same seed, same board; a different seed gives a different board.
+    auto layoutFor = [](std::uint32_t seed) {
+      Game seeded;
+      seeded.seed(seed);
+      seeded.start(16, 16);
+      seeded.placeMines(8, 8);
+      std::vector<bool> mines;
+      for (int x = 0; x < 16; ++x)
+        for (int y = 0; y < 16; ++y)
+          mines.push_back(seeded.cell(x, y).isMine);
+      return mines;
+    };
+    require(layoutFor(7) == layoutFor(7), "Seeded mine layout not reproducible");
+    require(layoutFor(7) != layoutFor(8), "Seed does not change the layout");
+  }
+
+  {
+    // Restart keeps the board settings and starts a fresh game.
+    Game restartGame;
+    restartGame.start(9, 7, 20);
+    const auto firstGame = restartGame.gameNumber();
+    restartGame.reveal(4, 3);
+    restartGame.restart();
+    require(restartGame.state() == GameState::PLAYING, "Restart left PLAYING");
+    require(restartGame.columns() == 9 && restartGame.rows() == 7 &&
+                restartGame.minePercent() == 20,
+            "Restart lost the board settings");
+    require(!restartGame.minesPlaced() && restartGame.revealedCount() == 0,
+            "Restart kept the old board");
+    require(restartGame.gameNumber() != firstGame, "Restart is not a new game");
+    restartGame.toMenu();
+    require(restartGame.state() == GameState::MENU, "toMenu did not reach MENU");
+  }
+
+  {
+    // Nothing can be flagged before the first click, and the timer waits for it.
+    Game early;
+    early.start(8, 8);
+    require(!early.toggleFlag(2, 2) && early.flagCount() == 0,
+            "Flag placed before the first click");
+    require(early.elapsedSeconds() == 0.f, "Timer runs before the first click");
+    require(early.reveal(0, 0) > 0 && early.minesPlaced(),
+            "First click did not place mines and open cells");
+    require(early.cell(0, 0).minesCount == 0, "First click is not an opening");
+  }
+
+  {
+    // Losing records the exploded cell and stops the timer.
+    Game lose;
+    lose.start(4, 4);
+    lose.loadMines({{3, 3}});
+    lose.reveal(3, 3);
+    require(lose.state() == GameState::GAME_OVER, "Mine did not end the game");
+    require(lose.explodedColumn() == 3 && lose.explodedRow() == 3,
+            "Exploded cell not recorded");
+    const float frozen = lose.elapsedSeconds();
+    require(lose.elapsedSeconds() == frozen, "Timer still running after a loss");
+    require(lose.reveal(0, 0) == 0, "Reveal accepted after the game ended");
   }
 
   Game game;
@@ -183,70 +281,80 @@ int main() {
                           std::pair{30, 4}, std::pair{12, 12}, std::pair{30, 30}}) {
     const auto [columns, rows] = size;
     require(game.start(columns, rows), "Valid game size rejected");
-    require(game.grid.size() == columns && game.grid[0].size() == rows,
+    require(static_cast<int>(game.grid().size()) == columns &&
+                static_cast<int>(game.grid()[0].size()) == rows,
             "Storage dimensions do not match");
-    game.resetGame(columns - 1, rows - 1);
-    require(!game.grid[columns - 1][rows - 1].isMine, "First click is unsafe");
+    game.placeMines(columns - 1, rows - 1);
+    require(!game.cell(columns - 1, rows - 1).isMine, "First click is unsafe");
     int mines = 0;
     for (int x = 0; x < columns; ++x) {
       for (int y = 0; y < rows; ++y) {
-        auto &cell = game.grid[x][y];
+        const Cell &cell = game.cell(x, y);
         if (cell.isMine) { ++mines; continue; }
         int neighbors = 0;
         for (int nx = x - 1; nx <= x + 1; ++nx)
           for (int ny = y - 1; ny <= y + 1; ++ny)
             if (nx >= 0 && nx < columns && ny >= 0 && ny < rows)
-              neighbors += game.grid[nx][ny].isMine;
+              neighbors += game.cell(nx, ny).isMine;
         require(cell.minesCount == neighbors, "Incorrect adjacent mine count");
-        cell.isRevealed = true;
       }
     }
     require(game.mineCount() == mines, "Incorrect mine count");
-    require(game.checkWinCondition(), "Rectangular win not detected");
-    game.grid[columns - 1][rows - 1].isRevealed = false;
-    require(!game.checkWinCondition(), "Win ignores last cell");
+
+    // Open the safe cells one at a time: the game is won exactly when the
+    // last one opens, never before.
+    for (int x = 0; x < columns; ++x)
+      for (int y = 0; y < rows; ++y) {
+        if (game.cell(x, y).isMine || game.cell(x, y).isRevealed)
+          continue;
+        require(game.state() == GameState::PLAYING, "Win ignores unopened cells");
+        game.reveal(x, y);
+        require((game.state() == GameState::GAME_WON) == game.checkWinCondition(),
+                "Win state does not match the board");
+      }
+    require(game.state() == GameState::GAME_WON, "Win not detected");
+
     game.restart();
     require(game.columns() == columns && game.rows() == rows, "Restart lost size");
-    require(game.mineCount() == 0 && game.revealedCount() == 0 && game.flagCount() == 0,
+    require(game.revealedCount() == 0 && game.flagCount() == 0,
             "Restart did not clear board");
-    game.toggleFlag(columns - 1, rows - 1);
-    require(game.flagCount() == 1, "Cannot flag final cell");
-    game.openCells(columns - 1, rows - 1);
-    require(game.revealedCount() == 0, "Revealed flagged cell");
-    game.toggleFlag(columns - 1, rows - 1);
-    game.openCells(0, 0);
-    require(game.revealedCount() == columns * rows, "Flood fill missed cells");
-    game.openCells(-1, 0);
+    game.reveal(-1, 0);
     game.toggleFlag(columns, rows);
+    game.reveal(0, 0);
+    require(game.toggleFlag(columns - 1, rows - 1) ||
+                game.cell(columns - 1, rows - 1).isRevealed,
+            "Cannot flag final cell");
+    if (game.cell(columns - 1, rows - 1).isFlag) {
+      const int before = game.revealedCount();
+      require(game.reveal(columns - 1, rows - 1) == 0 &&
+                  game.revealedCount() == before,
+              "Revealed flagged cell");
+    }
 
     // Chord: a revealed 1 with its single mine flagged opens the rest.
     if (columns == 4 && rows == 4) {
-      game.restart();
       game.start(4, 4);
-      for (auto &column : game.grid)
-        for (auto &cell : column)
-          cell = Cell();
-      game.grid[0][0].isMine = true;
-      for (int x = 0; x < 4; ++x)
-        for (int y = 0; y < 4; ++y)
-          if (!game.grid[x][y].isMine) {
-            int n = 0;
-            for (int nx = x - 1; nx <= x + 1; ++nx)
-              for (int ny = y - 1; ny <= y + 1; ++ny)
-                if (nx >= 0 && nx < 4 && ny >= 0 && ny < 4)
-                  n += game.grid[nx][ny].isMine;
-            game.grid[x][y].minesCount = n;
-          }
-      game.grid[1][1].isRevealed = true;
-      require(!game.chordReveal(1, 1), "Chord fired without flags");
+      game.loadMines({{0, 0}});
+      require(game.reveal(1, 1) == 1, "Number cell did not open alone");
+      require(game.reveal(1, 1) == 0, "Chord fired without flags");
       game.toggleFlag(0, 0);
-      require(game.chordReveal(1, 1), "Chord ignored matching flags");
-      require(game.revealedCount() == 15 && !game.grid[0][0].isRevealed,
+      require(game.reveal(1, 1) == 14, "Chord ignored matching flags");
+      require(game.revealedCount() == 15 && !game.cell(0, 0).isRevealed,
               "Chord revealed wrong cells");
-      require(game.state == PLAYING, "Safe chord ended the game");
-      game.restart();
+      require(game.state() == GameState::GAME_WON, "Safe chord did not win");
+
+      // A wrong flag makes the chord hit the mine.
+      game.start(4, 4);
+      game.loadMines({{0, 0}});
+      game.reveal(1, 1);
+      game.toggleFlag(2, 0);
+      game.reveal(1, 1);
+      require(game.state() == GameState::GAME_OVER &&
+                  game.explodedColumn() == 0 && game.explodedRow() == 0,
+              "Chord with a wrong flag did not explode the mine");
       game.start(4, 4);
     }
+
 
     for (const auto viewport : {std::pair{480u, 360u}, std::pair{640u, 480u},
                                 std::pair{1200u, 700u}, std::pair{700u, 1200u}}) {

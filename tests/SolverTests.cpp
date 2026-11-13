@@ -101,23 +101,42 @@ static bool certainMine(const Tally &t, int i) {
 // A real game state: random mines, a safe opening, a few extra safe reveals
 // and some correctly flagged mines.
 static void randomScenario(Game &g, std::mt19937 &rng, int cols, int rows) {
-  std::srand(static_cast<unsigned>(rng()));
+  g.seed(static_cast<std::uint32_t>(rng()));
   g.start(cols, rows);
   const int fc = rng() % cols, fr = rng() % rows;
-  g.resetGame(fc, fr);
-  g.isFirstClick = false;
-  g.openCells(fc, fr);
+  g.reveal(fc, fr);
   const int extra = rng() % 6;
   for (int k = 0; k < extra; k++) {
     const int c = rng() % cols, r = rng() % rows;
-    if (!g.grid[c][r].isMine && !g.grid[c][r].isRevealed)
-      g.openCells(c, r);
+    if (!g.cell(c, r).isMine && !g.cell(c, r).isRevealed)
+      g.reveal(c, r);
   }
   for (int c = 0; c < cols; c++)
     for (int r = 0; r < rows; r++)
-      if (g.grid[c][r].isMine && rng() % 2)
+      if (g.cell(c, r).isMine && rng() % 2)
         g.toggleFlag(c, r);
-  g.checkAndHandleWin();
+}
+
+// The board as a player with correct flags sees it: unlike
+// Solver::snapshot(), every flag on the board counts.
+static Solver::Snapshot snapshotWithFlags(const Game &g) {
+  Solver::Snapshot s;
+  s.columns = g.columns();
+  s.rows = g.rows();
+  s.totalMines = g.mineCount();
+  s.view.assign(s.size(), View::Unknown);
+  s.number.assign(s.size(), 0);
+  for (int c = 0; c < s.columns; c++)
+    for (int r = 0; r < s.rows; r++) {
+      const Cell &cell = g.cell(c, r);
+      if (cell.isRevealed) {
+        s.view[s.id(c, r)] = View::Revealed;
+        s.number[s.id(c, r)] = cell.minesCount;
+      } else if (cell.isFlag) {
+        s.view[s.id(c, r)] = View::Flagged;
+      }
+    }
+  return s;
 }
 
 static std::set<int> asSet(const std::vector<int> &v) {
@@ -184,9 +203,9 @@ static void testAgainstBruteForce() {
     const int cols = 4 + rng() % 3, rows = 4 + rng() % 2;
     Game g;
     randomScenario(g, rng, cols, rows);
-    if (g.state != PLAYING)
+    if (g.state() != GameState::PLAYING)
       continue;
-    const Solver::Snapshot s = Solver(g).snapshot();
+    const Solver::Snapshot s = snapshotWithFlags(g);
     Brute b;
     if (!bruteForce(s, b, 18))
       continue;
@@ -291,17 +310,17 @@ static void testFullGames(int cols, int rows, int games, unsigned seed,
                           bool expectSomeWins) {
   int wins = 0, totalGuesses = 0, deductions = 0;
   for (int n = 0; n < games; n++) {
-    std::srand(seed + n);
     Game g;
+    g.seed(seed + n);
     g.start(cols, rows);
     Solver solver(g);
     const auto result = solver.solve();
-    require(g.state == GAME_WON || g.state == GAME_OVER,
+    require(g.state() == GameState::GAME_WON || g.state() == GameState::GAME_OVER,
             "solve() left the game unfinished");
-    require(result.won == (g.state == GAME_WON), "result.won mismatch");
+    require(result.won == (g.state() == GameState::GAME_WON), "result.won mismatch");
     int guessMoves = 0;
     for (const auto &m : solver.history) {
-      const Cell &cell = g.grid[m.column][m.row];
+      const Cell &cell = g.cell(m.column, m.row);
       if (m.guess) {
         guessMoves++;
         continue;
@@ -316,9 +335,9 @@ static void testFullGames(int cols, int rows, int games, unsigned seed,
     require(guessMoves == result.guesses, "guess count mismatch");
     for (int c = 0; c < cols; c++)
       for (int r = 0; r < rows; r++)
-        if (g.grid[c][r].isFlag)
-          require(g.grid[c][r].isMine, "board holds a wrong flag");
-    if (g.state == GAME_OVER)
+        if (g.cell(c, r).isFlag)
+          require(g.cell(c, r).isMine, "board holds a wrong flag");
+    if (g.state() == GameState::GAME_OVER)
       require(!solver.history.empty() && solver.history.back().guess,
               "game lost without a guess");
     else
@@ -334,16 +353,111 @@ static void testFullGames(int cols, int rows, int games, unsigned seed,
 }
 
 static void testFirstClickIsCorner() {
-  std::srand(7);
   Game g;
+  g.seed(7);
   g.start(8, 8);
   Solver solver(g);
   require(solver.playTurn(), "first turn did nothing");
   require(solver.history.size() == 1 && solver.history[0].column == 0 &&
               solver.history[0].row == 0 && !solver.history[0].guess,
           "first move must be a non-guess corner click");
-  require(!g.isFirstClick && g.grid[0][0].isRevealed,
+  require(g.minesPlaced() && g.cell(0, 0).isRevealed,
           "corner not opened via the game's first-click convention");
+}
+
+// A new game (restart) must not inherit the previous game's history.
+static void testNewGameResetsSolver() {
+  Game g;
+  g.seed(3);
+  g.start(8, 8);
+  Solver solver(g);
+  solver.solve();
+  require(!solver.history.empty(), "solver did nothing");
+  g.restart();
+  require(solver.playTurn(), "no turn after restart");
+  require(solver.history.size() == 1 && solver.guesses == 0,
+          "solver kept the previous game's history");
+}
+
+// Wrong player flags next to revealed numbers must never make the hint point
+// at a mine, nor make the solver open a mine without guessing.
+static void testWrongPlayerFlags() {
+  std::mt19937 rng(777);
+  int wrongFlags = 0;
+  for (int k = 0; k < 200; k++) {
+    Game g;
+    randomScenario(g, rng, 9, 9);
+    if (g.state() != GameState::PLAYING)
+      continue;
+    // Flag a few safe unknown cells that touch a revealed number.
+    for (int c = 0; c < 9; c++)
+      for (int r = 0; r < 9; r++) {
+        const Cell &cell = g.cell(c, r);
+        if (cell.isMine || cell.isRevealed || cell.isFlag || rng() % 3)
+          continue;
+        bool touches = false;
+        for (int dc = -1; dc <= 1; dc++)
+          for (int dr = -1; dr <= 1; dr++)
+            touches |= g.inBounds(c + dc, r + dr) &&
+                       g.cell(c + dc, r + dr).isRevealed;
+        if (touches && g.toggleFlag(c, r))
+          wrongFlags++;
+      }
+
+    Solver solver(g);
+    if (const auto hint = solver.findHint()) {
+      const Cell &cell = g.cell(hint->first, hint->second);
+      require(!cell.isMine, "hint trusted a wrong flag and pointed at a mine");
+      require(!cell.isFlag, "hint pointed at a flagged cell");
+    }
+    solver.solve();
+    require(g.state() != GameState::PLAYING, "solver stalled on wrong flags");
+    for (const auto &m : solver.history)
+      if (!m.guess)
+        require(m.flag == g.cell(m.column, m.row).isMine,
+                "solver made a wrong non-guess move with wrong flags around");
+    if (g.state() == GameState::GAME_OVER)
+      require(solver.history.back().guess, "lost without a guess");
+  }
+  require(wrongFlags > 50, "too few wrong flags placed to test anything");
+}
+
+// Large boards produce huge solution counts and binomials; probabilities must
+// stay finite (raw counts overflow a double, which is MSVC's long double).
+static void testProbabilitiesStayFinite() {
+  // 30x30: isolated revealed 4s, each ringed by 8 unknown cells (70 ways
+  // each), on a 4-cell grid so the blocks are separate components and a
+  // large interior remains.
+  Solver::Snapshot s;
+  s.columns = 30;
+  s.rows = 30;
+  s.view.assign(s.size(), View::Unknown);
+  s.number.assign(s.size(), 0);
+  int blocks = 0;
+  for (int c = 1; c < 30; c += 4)
+    for (int r = 1; r < 30; r += 4) {
+      if (c + 1 >= 30 || r + 1 >= 30)
+        continue;
+      s.view[s.id(c, r)] = View::Revealed;
+      s.number[s.id(c, r)] = 4;
+      blocks++;
+    }
+  s.totalMines = blocks * 4 + 200;
+  const Solver::Frontier f = Solver::analyzeFrontier(s);
+  const Solver::Probabilities pr = Solver::computeProbabilities(s, f);
+  require(pr.usedGlobalCount, "a consistent mine total was ignored");
+  for (int id = 0; id < s.size(); id++) {
+    if (s.view[id] != View::Unknown)
+      continue;
+    require(std::isfinite(pr.mineProb[id]) && pr.mineProb[id] >= 0.0 &&
+                pr.mineProb[id] <= 1.0,
+            "probability is not a finite value in [0, 1]");
+    require(!pr.certainSafe[id] && !pr.certainMine[id],
+            "nothing is certain on this board");
+  }
+  // Every ring cell is symmetric: 4 of 8, so exactly one half.
+  require(std::abs(pr.mineProb[s.id(0, 0)] - 0.5) < 1e-9,
+          "ring cell probability should be 0.5");
 }
 
 static void testHintFindsSearchSafeCell() {
@@ -386,7 +500,7 @@ static void testHintNeverMine() {
     const auto hint = solver.findHint();
     if (!hint)
       continue;
-    const Cell &c = g.grid[hint->first][hint->second];
+    const Cell &c = g.cell(hint->first, hint->second);
     require(!c.isMine, "hint pointed at a mine");
     require(!c.isRevealed && !c.isFlag, "hint pointed at a non-unknown cell");
   }
@@ -396,6 +510,9 @@ int main() {
   testHandBuiltSubsetPattern();
   testComponentsSplit();
   testFirstClickIsCorner();
+  testNewGameResetsSolver();
+  testWrongPlayerFlags();
+  testProbabilitiesStayFinite();
   testHintFindsSearchSafeCell();
   testNoHintOnEmptyBoard();
   testHintNeverMine();

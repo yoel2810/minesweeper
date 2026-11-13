@@ -86,6 +86,10 @@ const char *const MINE_ART[ART_SIZE] = {"...#...", ".#.#.#.", "..###..",
 const char *const FLAG_ART[ART_SIZE] = {"..##...", "..####.", "..#####",
                                         "..#....", "..#....", ".###...",
                                         "#####.."};
+// Drawn over a flag that turned out to be on a safe cell.
+const char *const CROSS_ART[ART_SIZE] = {"##...##", ".##.##.", "..###..",
+                                         "...#...", "..###..", ".##.##.",
+                                         "##...##"};
 
 void drawArt(sf::RenderWindow &w, const char *const *art, sf::Vector2f cellPos,
              float cellSize, sf::Color ink, sf::Color highlight) {
@@ -153,11 +157,7 @@ std::string formatTime(int seconds) {
 }
 
 int displayedSeconds(const Game &game) {
-  if (game.state == PLAYING)
-    return static_cast<int>(game.gameClock.getElapsedTime().asSeconds());
-  if (game.state == GAME_OVER || game.state == GAME_WON)
-    return static_cast<int>(game.elapsedSeconds);
-  return 0;
+  return static_cast<int>(game.elapsedSeconds());
 }
 
 // Segment-display readout: unlit "8"s sit behind the lit digits.
@@ -219,7 +219,7 @@ float boardCenterY(sf::Vector2u size) {
 
 void drawEndCard(sf::RenderWindow &w, sf::Font &font, const std::string &title,
                  const std::string &detail, const std::string &hint,
-                 Button &primary, Button &secondary) {
+                 const Button &primary, const Button &secondary) {
   dimScreen(w);
   const auto size = w.getSize();
   const float centerX = static_cast<float>(size.x) / 2.f;
@@ -242,11 +242,17 @@ Button::Button(sf::Font &font, const std::string &str, sf::Vector2f pos,
   shape.setFillColor(normal);
   shape.setOutlineThickness(0.f);
   text.setFillColor(textColor);
-  // SFML 3: getLocalBounds returns rect with position offset
-  sf::FloatRect bounds = text.getLocalBounds();
-  float textX = pos.x + (size.x - bounds.size.x) / 2.f - bounds.position.x;
-  float textY = pos.y + (size.y - bounds.size.y) / 2.f - bounds.position.y;
-  text.setPosition(sf::Vector2f(std::round(textX), std::round(textY)));
+  centerLabel();
+}
+
+void Button::centerLabel() {
+  // SFML 3: local bounds carry the glyphs' offset from the text origin.
+  const sf::FloatRect bounds = text.getLocalBounds();
+  const sf::Vector2f pos = shape.getPosition();
+  const sf::Vector2f size = shape.getSize();
+  text.setPosition(
+      {std::round(pos.x + (size.x - bounds.size.x) / 2.f - bounds.position.x),
+       std::round(pos.y + (size.y - bounds.size.y) / 2.f - bounds.position.y)});
 }
 
 bool Button::contains(sf::Vector2i p) const {
@@ -264,12 +270,14 @@ void Button::setHovered(bool h) {
 }
 
 void Button::setPosition(sf::Vector2f pos) {
-  sf::Vector2f delta = pos - shape.getPosition();
   shape.setPosition(pos);
-  text.setPosition(text.getPosition() + delta);
+  centerLabel();
 }
 
-void Button::setSize(sf::Vector2f size) { shape.setSize(size); }
+void Button::setSize(sf::Vector2f size) {
+  shape.setSize(size);
+  centerLabel();
+}
 
 void Button::draw(sf::RenderWindow &w) const {
   const sf::Vector2f pos = shape.getPosition();
@@ -296,19 +304,6 @@ void Button::draw(sf::RenderWindow &w) const {
   label.setFillColor(textColor);
   label.move(press);
   w.draw(label);
-}
-
-void drawOverlay(sf::RenderWindow &w, sf::Color c) {
-  fillRect(w, {0.f, 0.f},
-           {static_cast<float>(w.getSize().x), static_cast<float>(w.getSize().y)},
-           c);
-}
-
-void centerText(sf::Text &t, float centerX, float y) {
-  sf::FloatRect b = t.getLocalBounds();
-  float x = centerX - (b.size.x / 2.f) - b.position.x;
-  float ty = y - b.position.y;
-  t.setPosition(sf::Vector2f(x, ty));
 }
 
 NumberField::NumberField(sf::Font &font, const std::string &name,
@@ -518,17 +513,18 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
            Palette::Darkest);
 
   std::optional<std::pair<int, int>> hovered;
-  if (game.state == PLAYING) {
+  if (game.state() == GameState::PLAYING) {
     const auto mouse = sf::Mouse::getPosition(w);
     hovered = layout.cellAt(mouse.x, mouse.y);
   }
 
+  const bool lost = game.state() == GameState::GAME_OVER;
   for (int i = 0; i < game.columns(); i++) {
     for (int j = 0; j < game.rows(); j++) {
-      const Cell &c = game.grid[i][j];
+      const Cell &c = game.cell(i, j);
       const sf::Vector2f pos(static_cast<float>(layout.x) + i * cell,
                              static_cast<float>(layout.y) + j * cell);
-      const bool exploded = i == game.explodedColumn && j == game.explodedRow;
+      const bool exploded = i == game.explodedColumn() && j == game.explodedRow();
       if (c.isRevealed && c.isMine) {
         drawFlat(w, pos, inner, exploded ? Palette::Darkest : Palette::Lightest);
         drawArt(w, MINE_ART, pos, inner,
@@ -542,8 +538,13 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
         const bool hover =
             !c.isRevealed && hovered && hovered->first == i && hovered->second == j;
         drawRaised(w, pos, inner, hover);
-        if (c.isFlag)
+        if (c.isFlag && lost && !c.isMine) {
+          // Wrong flag, shown once the game is lost: faded flag, crossed out.
+          drawArt(w, FLAG_ART, pos, inner, Palette::Dark, Palette::Dark);
+          drawArt(w, CROSS_ART, pos, inner, Palette::Darkest, Palette::Darkest);
+        } else if (c.isFlag) {
           drawArt(w, FLAG_ART, pos, inner, Palette::Darkest, Palette::Darkest);
+        }
       }
     }
   }
@@ -574,10 +575,7 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
   }
 }
 
-void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
-              NumberField &columns, NumberField &rows,
-              NumberField &minePercent,
-              const std::vector<Button> &difficultyButtons,
+void drawMenu(sf::RenderWindow &w, sf::Font &font, Controls &controls,
               const std::string &error) {
   const auto size = w.getSize();
   const float centerX = static_cast<float>(size.x) / 2.f;
@@ -585,10 +583,10 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
 
   drawLcdTitle(w, font, "MINESWEEPER", 72, centerX, centerY - 142.f);
 
-  columns.draw(w);
-  rows.draw(w);
-  minePercent.draw(w);
-  for (const Button &button : difficultyButtons)
+  controls.columns.draw(w);
+  controls.rows.draw(w);
+  controls.mines.draw(w);
+  for (const Button &button : controls.difficulty)
     button.draw(w);
 
   if (error.empty()) {
@@ -605,9 +603,9 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
     w.draw(msg);
   }
 
-  startButton.draw(w);
+  controls.menuStart.draw(w);
 
-  drawText(w, font, "LEFT: REVEAL  RIGHT: FLAG  R: RESTART", 16,
+  drawText(w, font, "LEFT: REVEAL  RIGHT: FLAG  R: RESTART  M: SOUND", 16,
            Palette::Dark, centerX, centerY + 102.f);
   drawText(w, font, "ESC: MENU  F11: FULLSCREEN  FIRST CLICK IS SAFE", 16,
            Palette::Dark, centerX, centerY + 120.f);
@@ -618,9 +616,8 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
            screen.position.y + screen.size.y - 18.f);
 }
 
-void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
-             Button &restartButton, Button &hintButton, Button &stepButton,
-             Button &solveButton) {
+void drawHUD(sf::RenderWindow &w, sf::Font &font, const Game &game,
+             const Controls &controls) {
   const float width = static_cast<float>(w.getSize().x);
   const float centerY = SCREEN_INSET + (HEADER_H - HUD_DIVIDER - 2.f - SCREEN_INSET) / 2.f;
   const int remaining = std::max(0, game.mineCount() - game.flagCount());
@@ -630,30 +627,90 @@ void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
   drawReadout(w, font, mines, "MINES", SCREEN_INSET + 18.f, centerY, false);
   drawReadout(w, font, formatTime(displayedSeconds(game)), "TIME",
               width - SCREEN_INSET - 18.f, centerY, true);
-  restartButton.draw(w);
-  hintButton.draw(w);
-  stepButton.draw(w);
-  solveButton.draw(w);
+  controls.hudRestart.draw(w);
+  controls.hudHint.draw(w);
+  controls.hudStep.draw(w);
+  controls.hudSolve.draw(w);
 }
 
-void drawGameOver(sf::RenderWindow &w, sf::Font &font, Game &game,
-                  Button &restartButton, Button &menuButton) {
+void drawGameOver(sf::RenderWindow &w, sf::Font &font, const Game &game,
+                  const Controls &controls) {
   drawEndCard(w, font, "GAME OVER",
               "TIME " + formatTime(displayedSeconds(game)),
-              "R: RESTART  ESC: MENU", restartButton, menuButton);
+              "R: RESTART  ESC: MENU", controls.overRestart, controls.overMenu);
 }
 
-void drawGameWon(sf::RenderWindow &w, sf::Font &font, Game &game,
-                 Button &againButton, Button &menuButton) {
+void drawGameWon(sf::RenderWindow &w, sf::Font &font, const Game &game,
+                 const Controls &controls) {
   drawEndCard(w, font, "YOU WIN!", "TIME " + formatTime(displayedSeconds(game)),
-              "R: PLAY AGAIN  ESC: MENU", againButton, menuButton);
-}
-
-void drawRestarting(sf::RenderWindow &w, sf::Font &font) {
-  dimScreen(w);
-  drawLcdTitle(w, font, "RESTARTING...", 40,
-               static_cast<float>(w.getSize().x) / 2.f,
-               static_cast<float>(w.getSize().y) / 2.f);
+              "R: PLAY AGAIN  ESC: MENU", controls.wonAgain, controls.wonMenu);
 }
 
 } // namespace UI
+
+namespace {
+Button hudKey(sf::Font &font, const std::string &label) {
+  Button button(font, label, {0.f, 0.f}, {32.f, 32.f}, 26);
+  UI::styleRubber(button);
+  button.shadowOffset = 3.f;
+  return button;
+}
+
+Button cardKey(sf::Font &font, const std::string &label, bool primary) {
+  Button button(font, label, {0.f, 0.f}, {200.f, 42.f}, 28);
+  if (primary)
+    UI::styleScreenPrimary(button);
+  else
+    UI::styleScreenSecondary(button);
+  return button;
+}
+} // namespace
+
+Controls::Controls(sf::Font &font)
+    : menuStart(font, "START GAME", {0.f, 0.f}, {200.f, 50.f}, 30),
+      columns(font, "Columns", {0.f, 0.f}), rows(font, "Rows", {0.f, 0.f}),
+      mines(font, "Mines %", {0.f, 0.f}), hudRestart(hudKey(font, "R")),
+      hudHint(hudKey(font, "?")), hudStep(hudKey(font, ">")),
+      hudSolve(hudKey(font, ">>")), overRestart(cardKey(font, "RESTART", true)),
+      overMenu(cardKey(font, "MENU", false)),
+      wonAgain(cardKey(font, "PLAY AGAIN", true)),
+      wonMenu(cardKey(font, "MENU", false)) {
+  UI::styleRubber(menuStart);
+  difficulty.reserve(DIFFICULTY_COUNT);
+  for (int i = 0; i < DIFFICULTY_COUNT; ++i)
+    difficulty.emplace_back(font, difficultyName(static_cast<Difficulty>(i)),
+                            sf::Vector2f(0.f, 0.f), UI::DIFFICULTY_BUTTON_SIZE,
+                            24);
+}
+
+void Controls::relayout(sf::Vector2u windowSize) {
+  UI::layoutControls(windowSize, menuStart, columns, rows, hudRestart,
+                     overRestart, overMenu, wonAgain, wonMenu);
+  UI::layoutSolverControls(windowSize, hudHint, hudStep, hudSolve);
+  UI::layoutDifficultyControls(windowSize, mines, difficulty);
+}
+
+void Controls::updateHover(GameState state, sf::Vector2i mouse) {
+  auto track = [&](Button &button, bool shown) {
+    button.setHovered(shown && button.contains(mouse));
+  };
+  const bool menu = state == GameState::MENU;
+  const bool playing = state == GameState::PLAYING;
+  const bool lost = state == GameState::GAME_OVER;
+  const bool won = state == GameState::GAME_WON;
+  track(menuStart, menu);
+  for (Button &button : difficulty)
+    track(button, menu);
+  for (Button *button : {&hudRestart, &hudHint, &hudStep, &hudSolve})
+    track(*button, playing);
+  track(overRestart, lost);
+  track(overMenu, lost);
+  track(wonAgain, won);
+  track(wonMenu, won);
+}
+
+void Controls::focusField(const NumberField *field) {
+  columns.focus(field == &columns);
+  rows.focus(field == &rows);
+  mines.focus(field == &mines);
+}
