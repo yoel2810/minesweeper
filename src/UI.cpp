@@ -428,14 +428,36 @@ void layoutControls(sf::Vector2u windowSize, Button &startButton,
                     Button &gameWonMenuButton) {
   const float centerX = static_cast<float>(windowSize.x) / 2.f;
   const float centerY = boardCenterY(windowSize);
-  startButton.setPosition({centerX - 100.f, centerY + 20.f});
-  columns.setPosition({centerX - 140.f, centerY - 70.f});
-  rows.setPosition({centerX + 20.f, centerY - 70.f});
+  startButton.setPosition({centerX - 100.f, centerY + 32.f});
+  columns.setPosition({centerX - 200.f, centerY - 84.f});
+  rows.setPosition({centerX - 60.f, centerY - 84.f});
   hudRestartButton.setPosition({centerX - 16.f, 20.f});
   gameOverRestartButton.setPosition({centerX - 100.f, centerY + 10.f});
   gameOverMenuButton.setPosition({centerX - 100.f, centerY + 62.f});
   gameWonAgainButton.setPosition({centerX - 100.f, centerY + 10.f});
   gameWonMenuButton.setPosition({centerX - 100.f, centerY + 62.f});
+}
+
+void layoutDifficultyControls(sf::Vector2u windowSize, NumberField &minePercent,
+                              std::vector<Button> &difficultyButtons) {
+  const float centerX = static_cast<float>(windowSize.x) / 2.f;
+  const float centerY = boardCenterY(windowSize);
+  minePercent.setPosition({centerX + 80.f, centerY - 84.f});
+  const float width = DIFFICULTY_BUTTON_SIZE.x, gap = 8.f;
+  const float rowWidth = difficultyButtons.size() * (width + gap) - gap;
+  for (std::size_t i = 0; i < difficultyButtons.size(); ++i)
+    difficultyButtons[i].setPosition(
+        {centerX - rowWidth / 2.f + i * (width + gap), centerY - 32.f});
+}
+
+void styleDifficultyButtons(std::vector<Button> &difficultyButtons,
+                            Difficulty selected) {
+  for (std::size_t i = 0; i < difficultyButtons.size(); ++i) {
+    if (static_cast<int>(i) == static_cast<int>(selected))
+      styleScreenPrimary(difficultyButtons[i]);
+    else
+      styleScreenSecondary(difficultyButtons[i]);
+  }
 }
 
 void layoutSolverControls(sf::Vector2u windowSize, Button &stepButton,
@@ -525,24 +547,30 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game) {
 }
 
 void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
-              NumberField &columns, NumberField &rows, const std::string &error) {
+              NumberField &columns, NumberField &rows,
+              NumberField &minePercent,
+              const std::vector<Button> &difficultyButtons,
+              const std::string &error) {
   const auto size = w.getSize();
   const float centerX = static_cast<float>(size.x) / 2.f;
   const float centerY = boardCenterY(size);
 
-  drawLcdTitle(w, font, "MINESWEEPER", 72, centerX, centerY - 126.f);
+  drawLcdTitle(w, font, "MINESWEEPER", 72, centerX, centerY - 142.f);
 
   columns.draw(w);
   rows.draw(w);
+  minePercent.draw(w);
+  for (const Button &button : difficultyButtons)
+    button.draw(w);
 
   if (error.empty()) {
-    drawText(w, font, "4-30 EACH  TAB: SWITCH  ENTER: START", 18,
-             Palette::Dark, centerX, centerY - 13.f);
+    drawText(w, font, "SIZE 4-30  MINES 5-50%  ENTER: START", 18,
+             Palette::Dark, centerX, centerY + 15.f);
   } else {
     // No red on an LCD: errors are shown as an inverted strip.
     sf::Text msg(font, error, 18);
     msg.setFillColor(Palette::Lightest);
-    centerTextBoth(msg, centerX, centerY - 13.f);
+    centerTextBoth(msg, centerX, centerY + 15.f);
     const sf::FloatRect b = msg.getGlobalBounds();
     fillRect(w, {b.position.x - 6.f, b.position.y - 4.f},
              {b.size.x + 12.f, b.size.y + 8.f}, Palette::Darkest);
@@ -552,9 +580,9 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
   startButton.draw(w);
 
   drawText(w, font, "LEFT: REVEAL  RIGHT: FLAG  R: RESTART", 16,
-           Palette::Dark, centerX, centerY + 98.f);
+           Palette::Dark, centerX, centerY + 102.f);
   drawText(w, font, "ESC: MENU  F11: FULLSCREEN  FIRST CLICK IS SAFE", 16,
-           Palette::Dark, centerX, centerY + 116.f);
+           Palette::Dark, centerX, centerY + 120.f);
 }
 
 void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,

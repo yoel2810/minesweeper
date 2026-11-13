@@ -13,6 +13,8 @@
 #include <ctime>
 #include <iostream>
 #include <optional>
+#include <string>
+#include <vector>
 
 int main() {
   // Seed rand() so mine layouts differ between runs.
@@ -42,7 +44,29 @@ int main() {
                          sf::Vector2f(200.f, 50.f), 30);
   NumberField columnsField(font, "Columns", {180.f, 190.f});
   NumberField rowsField(font, "Rows", {340.f, 190.f});
+  // Difficulty presets fill the MINES % field; typing in it selects CUSTOM.
+  NumberField minesField(font, "Mines %", {500.f, 190.f});
+  Difficulty difficulty = Difficulty::Medium;
+  std::vector<Button> difficultyButtons;
+  difficultyButtons.reserve(DIFFICULTY_COUNT);
+  for (int i = 0; i < DIFFICULTY_COUNT; ++i)
+    difficultyButtons.emplace_back(font,
+                                   difficultyName(static_cast<Difficulty>(i)),
+                                   sf::Vector2f(0.f, 0.f),
+                                   UI::DIFFICULTY_BUTTON_SIZE, 24);
   std::string sizeError;
+  auto selectDifficulty = [&](Difficulty selected) {
+    difficulty = selected;
+    if (selected != Difficulty::Custom)
+      minesField.value = std::to_string(presetMinePercent(selected));
+    UI::styleDifficultyButtons(difficultyButtons, difficulty);
+  };
+  selectDifficulty(difficulty);
+  auto focusField = [&](NumberField *field) {
+    columnsField.focus(field == &columnsField);
+    rowsField.focus(field == &rowsField);
+    minesField.focus(field == &minesField);
+  };
   auto startGame = [&]() {
     const auto columns = parseBoardDimension(columnsField.value);
     const auto rows = parseBoardDimension(rowsField.value);
@@ -50,10 +74,14 @@ int main() {
       sizeError = "Enter columns and rows from 4 to 30.";
       return;
     }
-    game.start(*columns, *rows);
+    const auto minePercent = parseMinePercent(minesField.value);
+    if (!minePercent) {
+      sizeError = "Enter a mine percentage from 5 to 50.";
+      return;
+    }
+    game.start(*columns, *rows, *minePercent);
     sizeError.clear();
-    columnsField.focus(false);
-    rowsField.focus(false);
+    focusField(nullptr);
   };
   Button hudRestartButton(font, "R", sf::Vector2f(304.f, 20.f),
                           sf::Vector2f(32.f, 32.f), 26);
@@ -87,6 +115,7 @@ int main() {
                      gameOverMenuButton, gameWonAgainButton,
                      gameWonMenuButton);
   UI::layoutSolverControls(window.getSize(), hudStepButton, hudSolveButton);
+  UI::layoutDifficultyControls(window.getSize(), minesField, difficultyButtons);
   auto toggleFullscreen = [&]() {
     displaySettings.toggle(window.getSize());
     const auto targetSize = displaySettings.targetSize(
@@ -104,6 +133,7 @@ int main() {
                        gameOverMenuButton, gameWonAgainButton,
                        gameWonMenuButton);
     UI::layoutSolverControls(targetSize, hudStepButton, hudSolveButton);
+    UI::layoutDifficultyControls(targetSize, minesField, difficultyButtons);
   };
 
   while (window.isOpen()) {
@@ -121,6 +151,8 @@ int main() {
                            gameWonAgainButton, gameWonMenuButton);
         UI::layoutSolverControls(resized->size, hudStepButton,
                                  hudSolveButton);
+        UI::layoutDifficultyControls(resized->size, minesField,
+                                     difficultyButtons);
       }
 
       if (const auto *key = event->getIf<sf::Event::KeyPressed>();
@@ -140,16 +172,25 @@ int main() {
         if (const auto *text = event->getIf<sf::Event::TextEntered>()) {
           const auto previousColumns = columnsField.value;
           const auto previousRows = rowsField.value;
+          const auto previousMines = minesField.value;
           columnsField.enter(text->unicode);
           rowsField.enter(text->unicode);
-          if (columnsField.value != previousColumns || rowsField.value != previousRows)
+          minesField.enter(text->unicode);
+          if (minesField.value != previousMines)
+            selectDifficulty(Difficulty::Custom);
+          if (columnsField.value != previousColumns ||
+              rowsField.value != previousRows || minesField.value != previousMines)
             sizeError.clear();
         }
         if (const auto *key = event->getIf<sf::Event::KeyPressed>()) {
           if (key->code == sf::Keyboard::Key::Tab) {
-            const bool selectColumns = !columnsField.focused;
-            columnsField.focus(selectColumns);
-            rowsField.focus(!selectColumns);
+            // Cycle COLUMNS -> ROWS -> MINES %.
+            if (columnsField.focused)
+              focusField(&rowsField);
+            else if (rowsField.focused)
+              focusField(&minesField);
+            else
+              focusField(&columnsField);
           } else if (key->code == sf::Keyboard::Key::Enter) {
             startGame();
           }
@@ -173,6 +214,8 @@ int main() {
         // Update hover per state
         if (game.state == MENU) {
           menuStartButton.setHovered(menuStartButton.contains(pos));
+          for (Button &button : difficultyButtons)
+            button.setHovered(button.contains(pos));
         } else if (game.state == PLAYING) {
           hudRestartButton.setHovered(hudRestartButton.contains(pos));
           hudStepButton.setHovered(hudStepButton.contains(pos));
@@ -195,6 +238,16 @@ int main() {
           if (mouseClick->button == sf::Mouse::Button::Left) {
             columnsField.focus(columnsField.contains(mousePos));
             rowsField.focus(rowsField.contains(mousePos));
+            minesField.focus(minesField.contains(mousePos));
+            for (int i = 0; i < DIFFICULTY_COUNT; ++i) {
+              if (!difficultyButtons[i].contains(mousePos))
+                continue;
+              const auto selected = static_cast<Difficulty>(i);
+              selectDifficulty(selected);
+              sizeError.clear();
+              // CUSTOM jumps straight into the percentage field.
+              focusField(selected == Difficulty::Custom ? &minesField : nullptr);
+            }
             if (menuStartButton.contains(mousePos)) {
               startGame();
             }
@@ -299,7 +352,8 @@ int main() {
 
     if (game.state == MENU) {
       // The menu is a boot screen: no board or HUD behind it.
-      UI::drawMenu(window, font, menuStartButton, columnsField, rowsField, sizeError);
+      UI::drawMenu(window, font, menuStartButton, columnsField, rowsField,
+                   minesField, difficultyButtons, sizeError);
     } else {
       UI::drawHUD(window, font, game, hudRestartButton, hudStepButton,
                   hudSolveButton);

@@ -4,6 +4,9 @@
 #include "UI.hpp"
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <tuple>
+#include <vector>
 
 void require(bool condition, const char *message) {
   if (!condition) {
@@ -52,21 +55,43 @@ int main() {
   Button wonMenu(font, "Menu", {0.f, 0.f}, {200.f, 42.f});
   Button stepButton(font, ">", {0.f, 0.f}, {32.f, 32.f});
   Button solveButton(font, ">>", {0.f, 0.f}, {32.f, 32.f});
+  NumberField layoutMines(font, "Mines %", {0.f, 0.f});
+  std::vector<Button> difficultyButtons;
+  for (int i = 0; i < DIFFICULTY_COUNT; ++i)
+    difficultyButtons.emplace_back(font, difficultyName(static_cast<Difficulty>(i)),
+                                   sf::Vector2f(), UI::DIFFICULTY_BUTTON_SIZE);
   for (const auto viewport : {sf::Vector2u(480, 360), sf::Vector2u(1200, 700)}) {
     UI::layoutControls(viewport, startButton, layoutColumns, layoutRows,
                        hudButton, overRestart, overMenu, wonAgain, wonMenu);
     UI::layoutSolverControls(viewport, stepButton, solveButton);
+    UI::layoutDifficultyControls(viewport, layoutMines, difficultyButtons);
     const float centerX = static_cast<float>(viewport.x) / 2.f;
     const float centerY =
         HEADER_H + (static_cast<float>(viewport.y) - HEADER_H) / 2.f;
     require(startButton.shape.getPosition() ==
-                sf::Vector2f(centerX - 100.f, centerY + 20.f),
+                sf::Vector2f(centerX - 100.f, centerY + 32.f),
             "Start button is not centered after resize");
     require(layoutColumns.shape.getPosition() ==
-                    sf::Vector2f(centerX - 140.f, centerY - 70.f) &&
+                    sf::Vector2f(centerX - 200.f, centerY - 84.f) &&
                 layoutRows.shape.getPosition() ==
-                    sf::Vector2f(centerX + 20.f, centerY - 70.f),
+                    sf::Vector2f(centerX - 60.f, centerY - 84.f) &&
+                layoutMines.shape.getPosition() ==
+                    sf::Vector2f(centerX + 80.f, centerY - 84.f),
             "Menu fields are not centered after resize");
+    const float rowLeft = difficultyButtons.front().shape.getPosition().x;
+    const auto &last = difficultyButtons.back().shape;
+    require(rowLeft >= 0.f &&
+                last.getPosition().x + last.getSize().x <=
+                    static_cast<float>(viewport.x) &&
+                rowLeft - centerX ==
+                    centerX - (last.getPosition().x + last.getSize().x),
+            "Difficulty row is not centered or does not fit");
+    for (std::size_t i = 1; i < difficultyButtons.size(); ++i)
+      require(difficultyButtons[i].shape.getPosition().y == centerY - 32.f &&
+                  difficultyButtons[i].shape.getPosition().x >
+                      difficultyButtons[i - 1].shape.getPosition().x +
+                          UI::DIFFICULTY_BUTTON_SIZE.x,
+              "Difficulty buttons overlap or are not in one row");
     require(hudButton.shape.getPosition() == sf::Vector2f(centerX - 16.f, 20.f),
             "HUD button is not centered after resize");
     require(stepButton.shape.getPosition() == sf::Vector2f(centerX - 56.f, 20.f) &&
@@ -109,6 +134,42 @@ int main() {
     require(!parseBoardDimension(value), "Invalid dimension accepted");
   require(parseBoardDimension("4") == 4, "Minimum rejected");
   require(parseBoardDimension("30") == 30, "Maximum rejected");
+
+  for (const auto &value : {"", "0", "4", "51", "99", "a", "-5", "100"})
+    require(!parseMinePercent(value), "Invalid mine percentage accepted");
+  require(parseMinePercent("5") == 5 && parseMinePercent("50") == 50,
+          "Mine percentage bounds rejected");
+  require(presetMinePercent(Difficulty::Easy) < presetMinePercent(Difficulty::Medium) &&
+              presetMinePercent(Difficulty::Medium) < presetMinePercent(Difficulty::Hard),
+          "Difficulty presets are not increasing");
+  for (const auto preset : {Difficulty::Easy, Difficulty::Medium, Difficulty::Hard})
+    require(parseMinePercent(std::to_string(presetMinePercent(preset))).has_value(),
+            "Difficulty preset outside the custom range");
+  require(presetMinePercent(Difficulty::Medium) == DEFAULT_MINE_PERCENT,
+          "Default density is not Medium");
+
+  {
+    Game densityGame;
+    require(!densityGame.start(12, 12, MIN_MINE_PERCENT - 1) &&
+                !densityGame.start(12, 12, MAX_MINE_PERCENT + 1),
+            "Invalid mine percentage accepted by Game::start");
+    // Exact mine counts: percentage of all cells, rounded.
+    for (const auto [columns, rows, percent, expected] :
+         {std::tuple{10, 10, 10, 10}, std::tuple{10, 10, 15, 15},
+          std::tuple{10, 10, 20, 20}, std::tuple{30, 16, 21, 101},
+          std::tuple{30, 30, 50, 450}, std::tuple{4, 4, 5, 1}}) {
+      require(densityGame.start(columns, rows, percent), "Valid density rejected");
+      require(densityGame.minePercent == percent, "Density not stored");
+      densityGame.resetGame(0, 0);
+      require(densityGame.mineCount() == expected, "Wrong number of mines placed");
+      require(!densityGame.grid[0][0].isMine && !densityGame.grid[1][1].isMine,
+              "Mine placed in the safe opening");
+    }
+    // A tiny dense board caps mines at the cells outside the 3x3 opening.
+    require(densityGame.start(4, 4, 50), "Dense tiny board rejected");
+    densityGame.resetGame(1, 1);
+    require(densityGame.mineCount() == 7, "Dense board not capped to free cells");
+  }
 
   Game game;
   require(game.columns() == 12 && game.rows() == 12, "Wrong default size");

@@ -1,6 +1,7 @@
 #pragma once
 #include "Game.hpp"
 #include <SFML/Graphics.hpp>
+#include <vector>
 
 // "Pocket LCD" theme: a four-shade green reflective screen set in a plastic
 // handheld bezel, with magenta rubber buttons for the main actions.
@@ -71,13 +72,23 @@ namespace UI {
                       Button& hudRestartButton, Button& gameOverRestartButton,
                       Button& gameOverMenuButton, Button& gameWonAgainButton,
                       Button& gameWonMenuButton);
+  // Menu difficulty row (EASY/MEDIUM/HARD/CUSTOM, in Difficulty order) sits
+  // under the size fields; the MINES % field is the third field in that row.
+  inline const sf::Vector2f DIFFICULTY_BUTTON_SIZE{92.f, 30.f};
+  void layoutDifficultyControls(sf::Vector2u windowSize, NumberField& minePercent,
+                                std::vector<Button>& difficultyButtons);
+  // The selected difficulty is a filled key, the others outlined.
+  void styleDifficultyButtons(std::vector<Button>& difficultyButtons,
+                              Difficulty selected);
   // Solver keys flank the HUD restart button: step left, solve right.
   void layoutSolverControls(sf::Vector2u windowSize, Button& stepButton,
                             Button& solveButton);
   void drawDevice(sf::RenderWindow& w, bool withHudDivider);
   void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game);
   void drawMenu(sf::RenderWindow& w, sf::Font& font, Button& startButton,
-                NumberField& columns, NumberField& rows, const std::string& error);
+                NumberField& columns, NumberField& rows, NumberField& minePercent,
+                const std::vector<Button>& difficultyButtons,
+                const std::string& error);
   void drawHUD(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton,
                Button& stepButton, Button& solveButton);
   void drawGameOver(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton, Button& menuButton);
