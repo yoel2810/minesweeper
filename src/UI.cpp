@@ -560,18 +560,27 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
     w.draw(outline);
   }
 
-  // Hint: a thinner inset outline in the mid-dark shade, so it reads as a
-  // suggestion rather than the solver's stronger mark.
+  // Hint: a sparkle, visually distinct from the solver's outline mark.
   if (hinted && hinted->first >= 0 && hinted->first < game.columns() &&
       hinted->second >= 0 && hinted->second < game.rows()) {
-    const float inset = std::max(3.f, std::floor(cell / 5.f));
-    sf::RectangleShape outline(sf::Vector2f(inner - 2.f * inset, inner - 2.f * inset));
-    outline.setPosition({static_cast<float>(layout.x) + hinted->first * cell + inset,
-                         static_cast<float>(layout.y) + hinted->second * cell + inset});
-    outline.setFillColor(sf::Color::Transparent);
-    outline.setOutlineColor(Palette::Dark);
-    outline.setOutlineThickness(-std::max(2.f, std::floor(cell / 12.f)));
-    w.draw(outline);
+    // A pulsing four-point sparkle, centered on the cell face.
+    static const sf::Clock pulseClock;
+    const float t = pulseClock.getElapsedTime().asSeconds();
+    const float pulse = 0.5f + 0.5f * std::sin(t * 6.f);
+    const float reach = inner * (0.28f + 0.17f * pulse);
+    const float waist = reach * 0.28f;
+    const sf::Vector2f center(
+        static_cast<float>(layout.x) + hinted->first * cell + inner / 2.f,
+        static_cast<float>(layout.y) + hinted->second * cell + inner / 2.f);
+    sf::ConvexShape star(8);
+    for (std::size_t k = 0; k < 8; k++) {
+      const float angle = static_cast<float>(k) * 0.7853982f - 1.5707963f;
+      const float r = k % 2 == 0 ? reach : waist;
+      star.setPoint(k, {center.x + r * std::cos(angle),
+                        center.y + r * std::sin(angle)});
+    }
+    star.setFillColor(Palette::Darkest);
+    w.draw(star);
   }
 }
 
@@ -605,9 +614,9 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Controls &controls,
 
   controls.menuStart.draw(w);
 
-  drawText(w, font, "LEFT: REVEAL  RIGHT: FLAG  R: RESTART  M: SOUND", 16,
+  drawText(w, font, "LEFT: REVEAL  RIGHT: FLAG  R: RESTART  P: PAUSE", 16,
            Palette::Dark, centerX, centerY + 102.f);
-  drawText(w, font, "ESC: MENU  F11: FULLSCREEN  FIRST CLICK IS SAFE", 16,
+  drawText(w, font, "ESC: MENU  M: SOUND  F11: FULLSCREEN  FIRST CLICK SAFE", 16,
            Palette::Dark, centerX, centerY + 120.f);
 
   // Credit line pinned to the bottom of the LCD glass.
@@ -616,8 +625,49 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Controls &controls,
            screen.position.y + screen.size.y - 18.f);
 }
 
+// Speaker icon on the mute key; crossed out while muted.
+static void drawSpeaker(sf::RenderWindow &w, const Button &key, bool muted) {
+  const sf::Vector2f p = key.shape.getPosition(), s = key.shape.getSize();
+  const float cx = p.x + s.x / 2.f - 3.f, cy = p.y + s.y / 2.f;
+  const sf::Color color = key.textColor;
+  fillRect(w, {cx - 8.f, cy - 3.f}, {5.f, 6.f}, color);
+  sf::ConvexShape cone(4);
+  cone.setPoint(0, {cx - 4.f, cy - 3.f});
+  cone.setPoint(1, {cx + 2.f, cy - 8.f});
+  cone.setPoint(2, {cx + 2.f, cy + 8.f});
+  cone.setPoint(3, {cx - 4.f, cy + 3.f});
+  cone.setFillColor(color);
+  w.draw(cone);
+  if (!muted) {
+    fillRect(w, {cx + 5.f, cy - 3.f}, {2.f, 6.f}, color);
+    fillRect(w, {cx + 9.f, cy - 6.f}, {2.f, 12.f}, color);
+  } else {
+    for (float d = 0.f; d < 9.f; d += 1.f) { // X made of small squares
+      fillRect(w, {cx + 5.f + d, cy - 4.f + d}, {2.f, 2.f}, color);
+      fillRect(w, {cx + 5.f + d, cy + 4.f - d}, {2.f, 2.f}, color);
+    }
+  }
+}
+
+// Pause bars on the pause key; a play triangle while paused.
+static void drawPauseIcon(sf::RenderWindow &w, const Button &key, bool paused) {
+  const sf::Vector2f p = key.shape.getPosition(), s = key.shape.getSize();
+  const float cx = p.x + s.x / 2.f, cy = p.y + s.y / 2.f;
+  if (paused) {
+    sf::ConvexShape triangle(3);
+    triangle.setPoint(0, {cx - 4.f, cy - 8.f});
+    triangle.setPoint(1, {cx + 7.f, cy});
+    triangle.setPoint(2, {cx - 4.f, cy + 8.f});
+    triangle.setFillColor(key.textColor);
+    w.draw(triangle);
+  } else {
+    fillRect(w, {cx - 6.f, cy - 7.f}, {4.f, 14.f}, key.textColor);
+    fillRect(w, {cx + 2.f, cy - 7.f}, {4.f, 14.f}, key.textColor);
+  }
+}
+
 void drawHUD(sf::RenderWindow &w, sf::Font &font, const Game &game,
-             const Controls &controls) {
+             const Controls &controls, bool muted) {
   const float width = static_cast<float>(w.getSize().x);
   const float centerY = SCREEN_INSET + (HEADER_H - HUD_DIVIDER - 2.f - SCREEN_INSET) / 2.f;
   const int remaining = std::max(0, game.mineCount() - game.flagCount());
@@ -631,6 +681,25 @@ void drawHUD(sf::RenderWindow &w, sf::Font &font, const Game &game,
   controls.hudHint.draw(w);
   controls.hudStep.draw(w);
   controls.hudSolve.draw(w);
+  controls.hudMute.draw(w);
+  drawSpeaker(w, controls.hudMute, muted);
+  controls.hudPause.draw(w);
+  drawPauseIcon(w, controls.hudPause, game.state() == GameState::PAUSED);
+}
+
+void drawPaused(sf::RenderWindow &w, sf::Font &font, const Game &game) {
+  const auto size = w.getSize();
+  const auto layout =
+      BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
+  const float frame = 3.f, cell = static_cast<float>(layout.cellSize);
+  const sf::Vector2f origin(static_cast<float>(layout.x) - frame,
+                            static_cast<float>(layout.y) - frame);
+  const sf::Vector2f extent(layout.columns * cell + 2.f * frame,
+                            layout.rows * cell + 2.f * frame);
+  fillRect(w, origin, extent, Palette::Darkest);
+  const float cx = origin.x + extent.x / 2.f, cy = origin.y + extent.y / 2.f;
+  drawText(w, font, "PAUSED", 48, Palette::Lightest, cx, cy - 12.f);
+  drawText(w, font, "P: RESUME", 20, Palette::Light, cx, cy + 24.f);
 }
 
 void drawGameOver(sf::RenderWindow &w, sf::Font &font, const Game &game,
@@ -671,7 +740,7 @@ Controls::Controls(sf::Font &font)
       columns(font, "Columns", {0.f, 0.f}), rows(font, "Rows", {0.f, 0.f}),
       mines(font, "Mines %", {0.f, 0.f}), hudRestart(hudKey(font, "R")),
       hudHint(hudKey(font, "?")), hudStep(hudKey(font, ">")),
-      hudSolve(hudKey(font, ">>")), overRestart(cardKey(font, "RESTART", true)),
+      hudSolve(hudKey(font, ">>")), hudMute(hudKey(font, "")), hudPause(hudKey(font, "")), overRestart(cardKey(font, "RESTART", true)),
       overMenu(cardKey(font, "MENU", false)),
       wonAgain(cardKey(font, "PLAY AGAIN", true)),
       wonMenu(cardKey(font, "MENU", false)) {
@@ -687,6 +756,8 @@ void Controls::relayout(sf::Vector2u windowSize) {
   UI::layoutControls(windowSize, menuStart, columns, rows, hudRestart,
                      overRestart, overMenu, wonAgain, wonMenu);
   UI::layoutSolverControls(windowSize, hudHint, hudStep, hudSolve);
+  hudMute.setPosition({static_cast<float>(windowSize.x) / 2.f + 64.f, 20.f});
+  hudPause.setPosition({static_cast<float>(windowSize.x) / 2.f - 136.f, 20.f});
   UI::layoutDifficultyControls(windowSize, mines, difficulty);
 }
 
@@ -696,13 +767,17 @@ void Controls::updateHover(GameState state, sf::Vector2i mouse) {
   };
   const bool menu = state == GameState::MENU;
   const bool playing = state == GameState::PLAYING;
+  const bool paused = state == GameState::PAUSED;
   const bool lost = state == GameState::GAME_OVER;
   const bool won = state == GameState::GAME_WON;
   track(menuStart, menu);
   for (Button &button : difficulty)
     track(button, menu);
-  for (Button *button : {&hudRestart, &hudHint, &hudStep, &hudSolve})
+  for (Button *button : {&hudHint, &hudStep, &hudSolve})
     track(*button, playing);
+  track(hudRestart, playing || paused);
+  track(hudPause, playing || paused);
+  track(hudMute, !menu);
   track(overRestart, lost);
   track(overMenu, lost);
   track(wonAgain, won);

@@ -97,7 +97,7 @@ struct Controls {
   Button menuStart;
   NumberField columns, rows, mines;
   std::vector<Button> difficulty; // in Difficulty order
-  Button hudRestart, hudHint, hudStep, hudSolve;
+  Button hudRestart, hudHint, hudStep, hudSolve, hudMute, hudPause;
   Button overRestart, overMenu, wonAgain, wonMenu;
 
   explicit Controls(sf::Font &font);
@@ -118,7 +118,9 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
 void drawMenu(sf::RenderWindow &w, sf::Font &font, Controls &controls,
               const std::string &error);
 void drawHUD(sf::RenderWindow &w, sf::Font &font, const Game &game,
-             const Controls &controls);
+             const Controls &controls, bool muted = false);
+// Covers the board while paused, so the pause cannot be used to study it.
+void drawPaused(sf::RenderWindow &w, sf::Font &font, const Game &game);
 void drawGameOver(sf::RenderWindow &w, sf::Font &font, const Game &game,
                   const Controls &controls);
 void drawGameWon(sf::RenderWindow &w, sf::Font &font, const Game &game,

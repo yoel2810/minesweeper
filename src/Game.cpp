@@ -17,6 +17,25 @@ bool Game::start(int newColumns, int newRows, int newMinePercent) {
   return true;
 }
 
+bool Game::pause() {
+  if (state_ != GameState::PLAYING)
+    return false;
+  if (minesPlaced_)
+    finalSeconds_ = secondsSinceStart();
+  state_ = GameState::PAUSED;
+  return true;
+}
+
+bool Game::resume() {
+  if (state_ != GameState::PAUSED)
+    return false;
+  if (minesPlaced_)
+    startedAt_ = Clock::now() - std::chrono::duration_cast<Clock::duration>(
+                                    std::chrono::duration<float>(finalSeconds_));
+  state_ = GameState::PLAYING;
+  return true;
+}
+
 void Game::restart() { start(columns(), rows(), minePercent_); }
 
 void Game::toMenu() {

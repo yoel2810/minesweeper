@@ -6,7 +6,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -246,6 +248,29 @@ int main() {
     require(restartGame.gameNumber() != firstGame, "Restart is not a new game");
     restartGame.toMenu();
     require(restartGame.state() == GameState::MENU, "toMenu did not reach MENU");
+  }
+
+  {
+    // Pausing freezes the timer and refuses moves; resuming continues.
+    Game paused;
+    paused.start(9, 7, 20);
+    require(!paused.resume(), "resume worked while not paused");
+    paused.reveal(4, 3);
+    require(paused.pause() && paused.state() == GameState::PAUSED,
+            "pause did not reach PAUSED");
+    require(!paused.pause(), "pause worked twice");
+    const float frozen = paused.elapsedSeconds();
+    const int revealed = paused.revealedCount();
+    require(paused.reveal(0, 0) == 0 && !paused.toggleFlag(0, 0) &&
+                paused.revealedCount() == revealed,
+            "a move was accepted while paused");
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    require(paused.elapsedSeconds() == frozen, "timer ran while paused");
+    require(paused.resume() && paused.state() == GameState::PLAYING,
+            "resume did not reach PLAYING");
+    require(paused.elapsedSeconds() >= frozen &&
+                paused.elapsedSeconds() < frozen + 0.05f,
+            "resume lost or gained time");
   }
 
   {

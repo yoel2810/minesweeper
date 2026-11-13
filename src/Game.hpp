@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-enum class GameState { MENU, PLAYING, GAME_OVER, GAME_WON };
+enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER, GAME_WON };
 
 // Minesweeper rules and board state. Every change goes through the action
 // methods below, so the win/loss bookkeeping (state, timer, exploded cell)
@@ -47,6 +47,10 @@ public:
   bool start(int columns, int rows, int minePercent = DEFAULT_MINE_PERCENT);
   void restart(); // a fresh game with the current size and density
   void toMenu();
+  // PLAYING <-> PAUSED. The timer stops while paused and no move is accepted.
+  // Both return false (and do nothing) from any other state.
+  bool pause();
+  bool resume();
   // A left click. The first one places the mines (the click and its
   // neighbours stay mine-free). On a revealed number whose adjacent flags
   // match it, opens the unflagged neighbours (chord). Flagged cells are left

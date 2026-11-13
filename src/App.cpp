@@ -205,6 +205,9 @@ void App::handleKey(sf::Keyboard::Key key) {
   case sf::Keyboard::Key::M:
     audio.toggleMute();
     break;
+  case sf::Keyboard::Key::P:
+    togglePause();
+    break;
   case sf::Keyboard::Key::R:
     game.restart();
     break;
@@ -219,7 +222,20 @@ void App::handleKey(sf::Keyboard::Key key) {
 void App::handleClick(sf::Mouse::Button button, sf::Vector2i position) {
   const Controls &c = *controls;
   const bool left = button == sf::Mouse::Button::Left;
+  if (left && game.state() != GameState::MENU && c.hudMute.contains(position)) {
+    audio.toggleMute();
+    return;
+  }
+  if (left && c.hudPause.contains(position) &&
+      (game.state() == GameState::PLAYING || game.state() == GameState::PAUSED)) {
+    togglePause();
+    return;
+  }
   switch (game.state()) {
+  case GameState::PAUSED:
+    if (left && c.hudRestart.contains(position))
+      game.restart();
+    break;
   case GameState::PLAYING:
     if (left && c.hudRestart.contains(position)) {
       game.restart();
@@ -270,6 +286,12 @@ void App::handleBoardClick(sf::Mouse::Button button, sf::Vector2i position) {
 }
 
 // ------------------------------------------------------------------ actions
+
+void App::togglePause() {
+  if (!game.pause())
+    game.resume();
+  audio.play(Sfx::Click);
+}
 
 void App::selectDifficulty(Difficulty selected) {
   difficulty = selected;
@@ -410,25 +432,19 @@ void App::draw() {
     UI::drawMenu(window, font, *controls, menuError);
     break;
   case GameState::PLAYING:
+  case GameState::PAUSED:
   case GameState::GAME_OVER:
   case GameState::GAME_WON:
-    UI::drawHUD(window, font, game, *controls);
-    UI::drawBoard(window, font, game, solverMark, hintMark);
+    UI::drawHUD(window, font, game, *controls, audio.isMuted());
+    if (game.state() == GameState::PAUSED)
+      UI::drawPaused(window, font, game);
+    else
+      UI::drawBoard(window, font, game, solverMark, hintMark);
     if (game.state() == GameState::GAME_OVER)
       UI::drawGameOver(window, font, game, *controls);
     else if (game.state() == GameState::GAME_WON)
       UI::drawGameWon(window, font, game, *controls);
     break;
-  }
-
-  if (game.state() != GameState::MENU) {
-    sf::Text soundLabel(font, audio.isMuted() ? "M: SOUND OFF" : "M: SOUND ON", 18);
-    soundLabel.setFillColor(Palette::Darkest);
-    const auto bounds = soundLabel.getLocalBounds();
-    const auto size = window.getSize();
-    soundLabel.setPosition({static_cast<float>(size.x) - bounds.size.x - 10.f,
-                            static_cast<float>(size.y) - bounds.size.y - 14.f});
-    window.draw(soundLabel);
   }
 
   window.display();

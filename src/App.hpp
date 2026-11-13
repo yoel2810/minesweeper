@@ -63,6 +63,7 @@ private:
 
   void selectDifficulty(Difficulty selected);
   void startGame();
+  void togglePause(); // P key and the pause button
   void requestHint();
   void requestSolverTurn();
   void collectSolverWork(); // applies finished worker results
