@@ -46,6 +46,11 @@ target_link_libraries(minesweeper_ui PUBLIC minesweeper_core SFML::Graphics)
 find_package(Threads REQUIRED)
 add_executable(minesweeper WIN32 src/main.cpp src/App.cpp src/Audio.cpp src/app.rc)
 target_link_libraries(minesweeper PRIVATE minesweeper_ui SFML::Audio Threads::Threads)
+if(MINGW)
+    # Link the GCC, C++ and pthread runtimes into the exe: the installer ships
+    # only minesweeper.exe, so it must not need MSYS2's DLLs at run time.
+    target_link_options(minesweeper PRIVATE -static)
+endif()
 
 add_executable(solver_bench src/SolverBench.cpp)
 target_link_libraries(solver_bench PRIVATE minesweeper_core)
