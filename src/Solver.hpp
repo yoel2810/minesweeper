@@ -1,6 +1,8 @@
 #pragma once
 #include "Game.hpp"
 #include <cstdint>
+#include <optional>
+#include <utility>
 #include <vector>
 
 // Automatic Minesweeper solver. See docs/solver-pseudocode.md for the algorithm.
@@ -126,6 +128,11 @@ public:
   static Deductions stepExhaustiveSearch(const Frontier &f);
   // Step 5: probabilities and the best guess.
   static GuessResult stepGuess(const Snapshot &s, const Frontier &f);
+  // Hint: first unrevealed cell provably safe (no guessing), or -1. Reads only.
+  static int stepHint(const Snapshot &s);
+  // Hint for the live game: (column, row) of a proven-safe cell, or nullopt.
+  // Before the first click the corner is returned, since it is always safe.
+  std::optional<std::pair<int, int>> findHint() const;
 
   // Building blocks (public so tests can exercise them).
   static std::vector<Constraint> buildConstraints(const Snapshot &s);

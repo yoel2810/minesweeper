@@ -42,8 +42,14 @@ int main() {
   sf::Clock solverTimer;
   // Cell the solver acted on last; outlined on the board.
   std::optional<std::pair<int, int>> solverMark;
+  // Cell the hint key pointed at; outlined on the board until the next move.
+  std::optional<std::pair<int, int>> hintMark;
+  // Set when the hint key found nothing provable; the key flashes until it fades.
+  std::optional<sf::Clock> noHintSince;
+  constexpr float NO_HINT_FLASH_SECONDS = 0.6f;
   // Shared end-of-move bookkeeping after the solver plays through Game.
   auto afterSolverTurn = [&]() {
+    hintMark.reset();
     if (!solver.history.empty()) {
       const auto &last = solver.history.back();
       solverMark = std::make_pair(last.column, last.row);
@@ -112,6 +118,10 @@ int main() {
                         sf::Vector2f(32.f, 32.f), 26);
   hudStepButton.shadowOffset = 3.f;
   hudSolveButton.shadowOffset = 3.f;
+  // Hint key: "?" marks one cell the solver can prove safe.
+  Button hudHintButton(font, "?", sf::Vector2f(224.f, 20.f),
+                       sf::Vector2f(32.f, 32.f), 26);
+  hudHintButton.shadowOffset = 3.f;
   Button gameOverRestartButton(font, "RESTART", sf::Vector2f(220.f, 240.f),
                                sf::Vector2f(200.f, 42.f), 28);
   Button gameOverMenuButton(font, "MENU", sf::Vector2f(220.f, 292.f),
@@ -124,6 +134,7 @@ int main() {
   UI::styleRubber(hudRestartButton);
   UI::styleRubber(hudStepButton);
   UI::styleRubber(hudSolveButton);
+  UI::styleRubber(hudHintButton);
   UI::styleScreenPrimary(gameOverRestartButton);
   UI::styleScreenSecondary(gameOverMenuButton);
   UI::styleScreenPrimary(gameWonAgainButton);
@@ -133,7 +144,8 @@ int main() {
                      rowsField, hudRestartButton, gameOverRestartButton,
                      gameOverMenuButton, gameWonAgainButton,
                      gameWonMenuButton);
-  UI::layoutSolverControls(window.getSize(), hudStepButton, hudSolveButton);
+  UI::layoutSolverControls(window.getSize(), hudHintButton, hudStepButton,
+                           hudSolveButton);
   UI::layoutDifficultyControls(window.getSize(), minesField, difficultyButtons);
   auto toggleFullscreen = [&]() {
     displaySettings.toggle(window.getSize());
@@ -151,7 +163,8 @@ int main() {
                        hudRestartButton, gameOverRestartButton,
                        gameOverMenuButton, gameWonAgainButton,
                        gameWonMenuButton);
-    UI::layoutSolverControls(targetSize, hudStepButton, hudSolveButton);
+    UI::layoutSolverControls(targetSize, hudHintButton, hudStepButton,
+                             hudSolveButton);
     UI::layoutDifficultyControls(targetSize, minesField, difficultyButtons);
   };
 
@@ -168,7 +181,7 @@ int main() {
                            rowsField, hudRestartButton,
                            gameOverRestartButton, gameOverMenuButton,
                            gameWonAgainButton, gameWonMenuButton);
-        UI::layoutSolverControls(resized->size, hudStepButton,
+        UI::layoutSolverControls(resized->size, hudHintButton, hudStepButton,
                                  hudSolveButton);
         UI::layoutDifficultyControls(resized->size, minesField,
                                      difficultyButtons);
@@ -239,6 +252,7 @@ int main() {
           hudRestartButton.setHovered(hudRestartButton.contains(pos));
           hudStepButton.setHovered(hudStepButton.contains(pos));
           hudSolveButton.setHovered(hudSolveButton.contains(pos));
+          hudHintButton.setHovered(hudHintButton.contains(pos));
         } else if (game.state == GAME_OVER) {
           gameOverRestartButton.setHovered(gameOverRestartButton.contains(pos));
           gameOverMenuButton.setHovered(gameOverMenuButton.contains(pos));
@@ -280,6 +294,14 @@ int main() {
           if (hudRestartButton.contains(mousePos) &&
               mouseClick->button == sf::Mouse::Button::Left) {
             game.restart();
+            continue;
+          }
+          if (mouseClick->button == sf::Mouse::Button::Left &&
+              hudHintButton.contains(mousePos)) {
+            hintMark = solver.findHint();
+            noHintSince.reset();
+            if (!hintMark)
+              noHintSince = sf::Clock{};
             continue;
           }
           if (mouseClick->button == sf::Mouse::Button::Left &&
@@ -336,6 +358,7 @@ int main() {
           const auto [col, row] = *cell;
           solverRunning = false; // a player click takes over from the solver
           solverMark.reset();
+          hintMark.reset();
 
           if (mouseClick->button == sf::Mouse::Button::Left) {
             std::cout << "Left click detected at: " << col << ", " << row
@@ -371,6 +394,7 @@ int main() {
     if (game.state != PLAYING) {
       solverRunning = false;
       solverMark.reset();
+      hintMark.reset();
     }
     if (solverRunning &&
         solverTimer.getElapsedTime().asSeconds() >= SOLVER_TURN_SECONDS) {
@@ -381,6 +405,18 @@ int main() {
         solverRunning = false;
     }
 
+    // While flashing, the hint key shows LCD colors (inverted) to say "no hint".
+    const bool hintFlashing =
+        noHintSince &&
+        noHintSince->getElapsedTime().asSeconds() < NO_HINT_FLASH_SECONDS;
+    UI::styleRubber(hudHintButton);
+    if (hintFlashing) {
+      hudHintButton.normal = Palette::Lightest;
+      hudHintButton.hover = Palette::Lightest;
+      hudHintButton.textColor = Palette::Darkest;
+      hudHintButton.shadow = sf::Color::Transparent;
+    }
+
     window.clear(Palette::Body);
     UI::drawDevice(window, game.state != MENU);
 
@@ -389,9 +425,9 @@ int main() {
       UI::drawMenu(window, font, menuStartButton, columnsField, rowsField,
                    minesField, difficultyButtons, sizeError);
     } else {
-      UI::drawHUD(window, font, game, hudRestartButton, hudStepButton,
-                  hudSolveButton);
-      UI::drawBoard(window, font, game, solverMark);
+      UI::drawHUD(window, font, game, hudRestartButton, hudHintButton,
+                  hudStepButton, hudSolveButton);
+      UI::drawBoard(window, font, game, solverMark, hintMark);
     }
 
     if (game.state == GAME_OVER) {

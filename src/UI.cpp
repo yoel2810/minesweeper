@@ -460,9 +460,10 @@ void styleDifficultyButtons(std::vector<Button> &difficultyButtons,
   }
 }
 
-void layoutSolverControls(sf::Vector2u windowSize, Button &stepButton,
-                          Button &solveButton) {
+void layoutSolverControls(sf::Vector2u windowSize, Button &hintButton,
+                          Button &stepButton, Button &solveButton) {
   const float centerX = static_cast<float>(windowSize.x) / 2.f;
+  hintButton.setPosition({centerX - 96.f, 20.f});
   stepButton.setPosition({centerX - 56.f, 20.f});
   solveButton.setPosition({centerX + 24.f, 20.f});
 }
@@ -500,7 +501,8 @@ void drawDevice(sf::RenderWindow &w, bool withHudDivider) {
 }
 
 void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
-               std::optional<std::pair<int, int>> marked) {
+               std::optional<std::pair<int, int>> marked,
+               std::optional<std::pair<int, int>> hinted) {
   const auto size = w.getSize();
   const auto layout =
       BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
@@ -556,6 +558,20 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
     outline.setOutlineThickness(-std::max(2.f, std::floor(cell / 8.f)));
     w.draw(outline);
   }
+
+  // Hint: a thinner inset outline in the mid-dark shade, so it reads as a
+  // suggestion rather than the solver's stronger mark.
+  if (hinted && hinted->first >= 0 && hinted->first < game.columns() &&
+      hinted->second >= 0 && hinted->second < game.rows()) {
+    const float inset = std::max(3.f, std::floor(cell / 5.f));
+    sf::RectangleShape outline(sf::Vector2f(inner - 2.f * inset, inner - 2.f * inset));
+    outline.setPosition({static_cast<float>(layout.x) + hinted->first * cell + inset,
+                         static_cast<float>(layout.y) + hinted->second * cell + inset});
+    outline.setFillColor(sf::Color::Transparent);
+    outline.setOutlineColor(Palette::Dark);
+    outline.setOutlineThickness(-std::max(2.f, std::floor(cell / 12.f)));
+    w.draw(outline);
+  }
 }
 
 void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
@@ -598,7 +614,8 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
 }
 
 void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
-             Button &restartButton, Button &stepButton, Button &solveButton) {
+             Button &restartButton, Button &hintButton, Button &stepButton,
+             Button &solveButton) {
   const float width = static_cast<float>(w.getSize().x);
   const float centerY = SCREEN_INSET + (HEADER_H - HUD_DIVIDER - 2.f - SCREEN_INSET) / 2.f;
   const int remaining = std::max(0, game.mineCount() - game.flagCount());
@@ -609,6 +626,7 @@ void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
   drawReadout(w, font, formatTime(displayedSeconds(game)), "TIME",
               width - SCREEN_INSET - 18.f, centerY, true);
   restartButton.draw(w);
+  hintButton.draw(w);
   stepButton.draw(w);
   solveButton.draw(w);
 }

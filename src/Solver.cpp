@@ -577,6 +577,39 @@ bool Solver::playTurn() {
   return false;
 }
 
+namespace {
+// First cell in `ids` that is still unrevealed and unflagged, or -1.
+int firstUnknown(const std::vector<int> &ids, const Solver::Snapshot &s) {
+  for (int id : ids)
+    if (s.view[id] == Solver::CellView::Unknown)
+      return id;
+  return -1;
+}
+} // namespace
+
+int Solver::stepHint(const Snapshot &s) {
+  if (int id = firstUnknown(stepBasicRules(s).safe, s); id >= 0)
+    return id;
+  if (int id = firstUnknown(stepSubsetRule(s).safe, s); id >= 0)
+    return id;
+  const Frontier f = analyzeFrontier(s);
+  if (int id = firstUnknown(stepExhaustiveSearch(f).safe, s); id >= 0)
+    return id;
+  return firstUnknown(stepGuess(s, f).certain.safe, s);
+}
+
+std::optional<std::pair<int, int>> Solver::findHint() const {
+  if (game.state != PLAYING)
+    return std::nullopt;
+  if (game.isFirstClick)
+    return std::make_pair(0, 0);
+  const Snapshot s = snapshot();
+  const int id = stepHint(s);
+  if (id < 0)
+    return std::nullopt;
+  return std::make_pair(s.column(id), s.row(id));
+}
+
 Solver::SolveResult Solver::solve() {
   while (playTurn()) {
   }

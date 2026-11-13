@@ -82,19 +82,22 @@ namespace UI {
   // The selected difficulty is a filled key, the others outlined.
   void styleDifficultyButtons(std::vector<Button>& difficultyButtons,
                               Difficulty selected);
-  // Solver keys flank the HUD restart button: step left, solve right.
-  void layoutSolverControls(sf::Vector2u windowSize, Button& stepButton,
-                            Button& solveButton);
+  // Hint key sits left of the solver keys: hint, step, then solve, all
+  // flanking the HUD restart button.
+  void layoutSolverControls(sf::Vector2u windowSize, Button& hintButton,
+                            Button& stepButton, Button& solveButton);
   void drawDevice(sf::RenderWindow& w, bool withHudDivider);
   // `marked` (column, row) gets an outline, e.g. the cell the solver just acted on.
+  // `hinted` gets a lighter inset outline, the cell the hint key pointed at.
   void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game,
-                 std::optional<std::pair<int, int>> marked = std::nullopt);
+                 std::optional<std::pair<int, int>> marked = std::nullopt,
+                 std::optional<std::pair<int, int>> hinted = std::nullopt);
   void drawMenu(sf::RenderWindow& w, sf::Font& font, Button& startButton,
                 NumberField& columns, NumberField& rows, NumberField& minePercent,
                 const std::vector<Button>& difficultyButtons,
                 const std::string& error);
   void drawHUD(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton,
-               Button& stepButton, Button& solveButton);
+               Button& hintButton, Button& stepButton, Button& solveButton);
   void drawGameOver(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton, Button& menuButton);
   void drawGameWon(sf::RenderWindow& w, sf::Font& font, Game& game, Button& againButton, Button& menuButton);
   void drawRestarting(sf::RenderWindow& w, sf::Font& font);

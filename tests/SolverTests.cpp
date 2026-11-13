@@ -346,10 +346,59 @@ static void testFirstClickIsCorner() {
           "corner not opened via the game's first-click convention");
 }
 
+static void testHintFindsSearchSafeCell() {
+  // Same 1-2-2-1 board: the hint must be one of the outer cells the search
+  // proves safe, never a mine.
+  Solver::Snapshot s;
+  s.columns = 4;
+  s.rows = 4;
+  s.totalMines = 4;
+  s.view.assign(16, View::Unknown);
+  s.number.assign(16, 0);
+  const int top[4] = {1, 2, 2, 1};
+  for (int c = 0; c < 4; c++) {
+    s.view[s.id(c, 0)] = View::Revealed;
+    s.number[s.id(c, 0)] = top[c];
+  }
+  const int hint = Solver::stepHint(s);
+  require(hint == s.id(0, 1) || hint == s.id(3, 1),
+          "hint should be a proven-safe cell of 1-2-2-1");
+}
+
+static void testNoHintOnEmptyBoard() {
+  // Nothing revealed and half the board mined: no cell is provably safe.
+  Solver::Snapshot s;
+  s.columns = 4;
+  s.rows = 4;
+  s.totalMines = 8;
+  s.view.assign(16, View::Unknown);
+  s.number.assign(16, 0);
+  require(Solver::stepHint(s) == -1,
+          "no cell is provable on an empty board, so no hint");
+}
+
+static void testHintNeverMine() {
+  std::mt19937 rng(42);
+  for (int k = 0; k < 300; k++) {
+    Game g;
+    randomScenario(g, rng, 8, 8);
+    Solver solver(g);
+    const auto hint = solver.findHint();
+    if (!hint)
+      continue;
+    const Cell &c = g.grid[hint->first][hint->second];
+    require(!c.isMine, "hint pointed at a mine");
+    require(!c.isRevealed && !c.isFlag, "hint pointed at a non-unknown cell");
+  }
+}
+
 int main() {
   testHandBuiltSubsetPattern();
   testComponentsSplit();
   testFirstClickIsCorner();
+  testHintFindsSearchSafeCell();
+  testNoHintOnEmptyBoard();
+  testHintNeverMine();
   testAgainstBruteForce();
   testFullGames(8, 8, 300, 1000, true);
   testFullGames(12, 12, 150, 5000, true);

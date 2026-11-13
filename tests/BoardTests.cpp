@@ -53,6 +53,7 @@ int main() {
   Button overMenu(font, "Menu", {0.f, 0.f}, {200.f, 42.f});
   Button wonAgain(font, "Again", {0.f, 0.f}, {200.f, 42.f});
   Button wonMenu(font, "Menu", {0.f, 0.f}, {200.f, 42.f});
+  Button hintButton(font, "?", {0.f, 0.f}, {32.f, 32.f});
   Button stepButton(font, ">", {0.f, 0.f}, {32.f, 32.f});
   Button solveButton(font, ">>", {0.f, 0.f}, {32.f, 32.f});
   NumberField layoutMines(font, "Mines %", {0.f, 0.f});
@@ -63,7 +64,11 @@ int main() {
   for (const auto viewport : {sf::Vector2u(480, 360), sf::Vector2u(1200, 700)}) {
     UI::layoutControls(viewport, startButton, layoutColumns, layoutRows,
                        hudButton, overRestart, overMenu, wonAgain, wonMenu);
-    UI::layoutSolverControls(viewport, stepButton, solveButton);
+    UI::layoutSolverControls(viewport, hintButton, stepButton, solveButton);
+    require(hintButton.shape.getPosition() ==
+                    sf::Vector2f(static_cast<float>(viewport.x) / 2.f - 96.f, 20.f) &&
+                hintButton.shape.getPosition().x < stepButton.shape.getPosition().x,
+            "hint key is not left of the solver keys");
     UI::layoutDifficultyControls(viewport, layoutMines, difficultyButtons);
     const float centerX = static_cast<float>(viewport.x) / 2.f;
     const float centerY =
