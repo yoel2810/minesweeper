@@ -1,3 +1,13 @@
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include "Audio.hpp"
 #include "Cell.hpp"
 #include "DisplaySettings.hpp"
@@ -17,6 +27,26 @@
 #include <string>
 #include <vector>
 
+// The window's title-bar and taskbar icon: the same .ico embedded in the exe
+// (resource ID 1, see src/app.rc). SFML cannot read .ico files itself.
+void applyWindowIcon(sf::RenderWindow &window) {
+#ifdef _WIN32
+  HWND hwnd = static_cast<HWND>(window.getNativeHandle());
+  HINSTANCE instance = GetModuleHandleW(nullptr);
+  HICON big = LoadIconW(instance, MAKEINTRESOURCEW(1));
+  HICON small = static_cast<HICON>(LoadImageW(
+      instance, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+      GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
+  if (big)
+    SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(big));
+  if (small)
+    SendMessageW(hwnd, WM_SETICON, ICON_SMALL,
+                 reinterpret_cast<LPARAM>(small));
+#else
+  (void)window;
+#endif
+}
+
 int main() {
   // Seed rand() so mine layouts differ between runs.
   std::srand(static_cast<unsigned>(std::time(nullptr)));
@@ -25,6 +55,7 @@ int main() {
                           sf::Style::Default);
   window.setFramerateLimit(60);
   window.setMinimumSize(sf::Vector2u(640, 480));
+  applyWindowIcon(window);
   DisplaySettings displaySettings;
 
   sf::Font font;
