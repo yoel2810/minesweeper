@@ -1,10 +1,10 @@
 ; Inno Setup script for Minesweeper.
 ; Build from the repo root after `cmake --build build`:
-;   "C:\Users\yoel2\AppData\Local\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.0.0 installer\minesweeper.iss
+;   "C:\Users\yoel2\AppData\Local\Programs\Inno Setup 6\ISCC.exe" /DMyAppVersion=1.0.1 installer\minesweeper.iss
 ; Output: build\installer\minesweeper-setup-<version>.exe
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.0.1"
 #endif
 
 #define MyAppName "Minesweeper"
