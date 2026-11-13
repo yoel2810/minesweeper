@@ -24,7 +24,7 @@ int main() {
   sf::RenderWindow window(sf::VideoMode(sf::Vector2u(640, 480)), "Minesweeper",
                           sf::Style::Default);
   window.setFramerateLimit(60);
-  window.setMinimumSize(sf::Vector2u(480, 360));
+  window.setMinimumSize(sf::Vector2u(640, 480));
   DisplaySettings displaySettings;
 
   sf::Font font;
@@ -160,7 +160,7 @@ int main() {
     if (displaySettings.fullscreen)
       window.setPosition({0, 0});
     else
-      window.setMinimumSize(sf::Vector2u(480, 360));
+      window.setMinimumSize(sf::Vector2u(640, 480));
     window.setView(sf::View(sf::FloatRect({}, sf::Vector2f(targetSize))));
     UI::layoutControls(targetSize, menuStartButton, columnsField, rowsField,
                        hudRestartButton, gameOverRestartButton,

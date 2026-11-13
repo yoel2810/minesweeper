@@ -9,7 +9,7 @@
 - SFML 3.1.0 via `FetchContent` (`CMakeLists.txt:12-18`, `SFML::Graphics` only; audio/network disabled) — first configure fetches from network and is slow; binaries go to `build/bin` (`CMakeLists.txt:5`)
 
 ## Project Structure
-- `src/main.cpp` — entrypoint, SFML window loop (`640x480` default, resizable, min `480x360`, 60fps), menu/HUD buttons, input handling, F11 fullscreen toggle (`DisplaySettings`), keys: `R` restart, `Esc` menu, `Tab`/`Enter` in menu fields
+- `src/main.cpp` — entrypoint, SFML window loop (`640x480` default, resizable, min `640x480`, 60fps), menu/HUD buttons, input handling, F11 fullscreen toggle (`DisplaySettings`), keys: `R` restart, `Esc` menu, `Tab`/`Enter` in menu fields
 - `src/Game.hpp` / `src/Game.cpp` — `Game` class: `GameState { MENU, PLAYING, GAME_OVER, GAME_WON, RESTARTING }`, `grid` is `std::vector<std::vector<Cell>>` indexed `grid[column][row]`, mine generation (`resetGame`), flood-fill (`openCells`), win check, flags, timer
 - `src/BoardSettings.hpp` — board size limits (`MIN_BOARD_SIZE 4`, `MAX_BOARD_SIZE 30`, `DEFAULT_BOARD_SIZE 12`), `CELL_SIZE_PX`, `HEADER_H`, `BOARD_PADDING`, `parseBoardDimension`, `BoardLayout::fit` (scales cells to fit the window) and `cellAt` (pixel → cell)
 - `src/Cell.hpp` / `src/Cell.cpp` — `Cell { minesCount, isRevealed, isMine, isFlag }`
