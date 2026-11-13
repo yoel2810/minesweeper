@@ -611,6 +611,11 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
            Palette::Dark, centerX, centerY + 102.f);
   drawText(w, font, "ESC: MENU  F11: FULLSCREEN  FIRST CLICK IS SAFE", 16,
            Palette::Dark, centerX, centerY + 120.f);
+
+  // Credit line pinned to the bottom of the LCD glass.
+  const sf::FloatRect screen = screenRect(size);
+  drawText(w, font, "MADE BY YOEL HARTMAN", 16, Palette::Dark, centerX,
+           screen.position.y + screen.size.y - 18.f);
 }
 
 void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
