@@ -1,0 +1,2 @@
+// Application icon embedded in minesweeper.exe (shows in Explorer, taskbar and shortcuts).
+1 ICON "../assets/icon/minesweeper.ico"

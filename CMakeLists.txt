@@ -17,7 +17,8 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
-add_executable(minesweeper src/main.cpp src/Cell.cpp src/Game.cpp src/UI.cpp src/Solver.cpp src/Audio.cpp)
+# WIN32 builds a GUI subsystem app, so no console window opens with the game.
+add_executable(minesweeper WIN32 src/main.cpp src/Cell.cpp src/Game.cpp src/UI.cpp src/Solver.cpp src/Audio.cpp src/app.rc)
 target_compile_features(minesweeper PRIVATE cxx_std_17)
 target_link_libraries(minesweeper PRIVATE SFML::Graphics SFML::Audio)
 

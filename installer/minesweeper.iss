@@ -30,6 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\icon\minesweeper.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
