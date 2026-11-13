@@ -21,6 +21,10 @@ add_executable(minesweeper src/main.cpp src/Cell.cpp src/Game.cpp src/UI.cpp src
 target_compile_features(minesweeper PRIVATE cxx_std_17)
 target_link_libraries(minesweeper PRIVATE SFML::Graphics)
 
+add_executable(solver_bench src/SolverBench.cpp src/Cell.cpp src/Game.cpp src/Solver.cpp)
+target_compile_features(solver_bench PRIVATE cxx_std_17)
+target_link_libraries(solver_bench PRIVATE SFML::Graphics)
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(board_tests tests/BoardTests.cpp src/Game.cpp src/Cell.cpp src/UI.cpp)
@@ -28,6 +32,12 @@ if(BUILD_TESTING)
     target_compile_features(board_tests PRIVATE cxx_std_17)
     target_link_libraries(board_tests PRIVATE SFML::Graphics)
     add_test(NAME board_tests COMMAND board_tests)
+
+    add_executable(solver_tests tests/SolverTests.cpp src/Game.cpp src/Cell.cpp src/Solver.cpp)
+    target_include_directories(solver_tests PRIVATE src)
+    target_compile_features(solver_tests PRIVATE cxx_std_17)
+    target_link_libraries(solver_tests PRIVATE SFML::Graphics)
+    add_test(NAME solver_tests COMMAND solver_tests)
     set_tests_properties(board_tests PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
