@@ -401,14 +401,21 @@ int main() {
           if (mouseClick->button == sf::Mouse::Button::Left) {
             std::cout << "Left click detected at: " << col << ", " << row
                       << std::endl;
-            if (game.grid[col][row].isFlag)
-              continue;
-            if (game.isFirstClick) {
-              game.resetGame(col, row);
-              game.isFirstClick = false;
+            // A click on an already revealed cell chords (see Game::chordReveal).
+            const bool chord = game.grid[col][row].isRevealed;
+            if (!chord) {
+              if (game.grid[col][row].isFlag)
+                continue;
+              if (game.isFirstClick) {
+                game.resetGame(col, row);
+                game.isFirstClick = false;
+              }
             }
             const int revealedBefore = game.revealedCount();
-            game.openCells(col, row);
+            if (chord)
+              game.chordReveal(col, row);
+            else
+              game.openCells(col, row);
             game.checkAndHandleWin();
             if (game.state == PLAYING) {
               const int opened = game.revealedCount() - revealedBefore;

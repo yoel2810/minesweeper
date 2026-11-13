@@ -219,6 +219,35 @@ int main() {
     game.openCells(-1, 0);
     game.toggleFlag(columns, rows);
 
+    // Chord: a revealed 1 with its single mine flagged opens the rest.
+    if (columns == 4 && rows == 4) {
+      game.restart();
+      game.start(4, 4);
+      for (auto &column : game.grid)
+        for (auto &cell : column)
+          cell = Cell();
+      game.grid[0][0].isMine = true;
+      for (int x = 0; x < 4; ++x)
+        for (int y = 0; y < 4; ++y)
+          if (!game.grid[x][y].isMine) {
+            int n = 0;
+            for (int nx = x - 1; nx <= x + 1; ++nx)
+              for (int ny = y - 1; ny <= y + 1; ++ny)
+                if (nx >= 0 && nx < 4 && ny >= 0 && ny < 4)
+                  n += game.grid[nx][ny].isMine;
+            game.grid[x][y].minesCount = n;
+          }
+      game.grid[1][1].isRevealed = true;
+      require(!game.chordReveal(1, 1), "Chord fired without flags");
+      game.toggleFlag(0, 0);
+      require(game.chordReveal(1, 1), "Chord ignored matching flags");
+      require(game.revealedCount() == 15 && !game.grid[0][0].isRevealed,
+              "Chord revealed wrong cells");
+      require(game.state == PLAYING, "Safe chord ended the game");
+      game.restart();
+      game.start(4, 4);
+    }
+
     for (const auto viewport : {std::pair{480u, 360u}, std::pair{640u, 480u},
                                 std::pair{1200u, 700u}, std::pair{700u, 1200u}}) {
       const auto [width, height] = viewport;

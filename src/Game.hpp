@@ -25,6 +25,9 @@ public:
 
   void resetGame(int firstClickI, int firstClickJ);
   void openCells(int i, int j);
+  // Chord: on a revealed number whose adjacent flags equal its number, open
+  // every unrevealed, unflagged neighbour. Returns false if it does not apply.
+  bool chordReveal(int i, int j);
   bool checkWinCondition();
   void checkAndHandleWin();
   void restart(); // instant: clear and go to MENU

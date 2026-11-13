@@ -100,6 +100,45 @@ void Game::openCells(int i, int j) {
   }
 }
 
+bool Game::chordReveal(int i, int j) {
+  if (i < 0 || i >= columns() || j < 0 || j >= rows())
+    return false;
+  const Cell &cell = grid[i][j];
+  if (!cell.isRevealed || cell.isMine || cell.minesCount == 0)
+    return false;
+
+  int flags = 0;
+  for (int dx = -1; dx <= 1; dx++) {
+    for (int dy = -1; dy <= 1; dy++) {
+      const int nx = i + dx;
+      const int ny = j + dy;
+      if ((dx == 0 && dy == 0) || nx < 0 || nx >= columns() || ny < 0 ||
+          ny >= rows())
+        continue;
+      if (grid[nx][ny].isFlag)
+        flags++;
+    }
+  }
+  if (flags != cell.minesCount)
+    return false;
+
+  for (int dx = -1; dx <= 1; dx++) {
+    for (int dy = -1; dy <= 1; dy++) {
+      const int nx = i + dx;
+      const int ny = j + dy;
+      if ((dx == 0 && dy == 0) || nx < 0 || nx >= columns() || ny < 0 ||
+          ny >= rows())
+        continue;
+      // A wrong flag can make this open a mine; stop once the game is over.
+      if (state != PLAYING)
+        return true;
+      if (!grid[nx][ny].isRevealed && !grid[nx][ny].isFlag)
+        openCells(nx, ny);
+    }
+  }
+  return true;
+}
+
 bool Game::checkWinCondition() {
   for (int i = 0; i < columns(); i++) {
     for (int j = 0; j < rows(); j++) {
