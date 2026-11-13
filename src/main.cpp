@@ -35,6 +35,25 @@ int main() {
   Game game;
   game.toMenu();
   Solver solver(game);
+  // ">>" plays the solver turn by turn, one turn every SOLVER_TURN_SECONDS, so
+  // the solution can be followed. A second press (or any board click) stops it.
+  constexpr float SOLVER_TURN_SECONDS = 0.15f;
+  bool solverRunning = false;
+  sf::Clock solverTimer;
+  // Cell the solver acted on last; outlined on the board.
+  std::optional<std::pair<int, int>> solverMark;
+  // Shared end-of-move bookkeeping after the solver plays through Game.
+  auto afterSolverTurn = [&]() {
+    if (!solver.history.empty()) {
+      const auto &last = solver.history.back();
+      solverMark = std::make_pair(last.column, last.row);
+    }
+    game.checkAndHandleWin();
+    if (game.state == GAME_OVER)
+      game.elapsedSeconds = game.gameClock.getElapsedTime().asSeconds();
+    if (game.state != PLAYING)
+      solverRunning = false;
+  };
 
   // Create buttons
   // The pixel font should stay crisp rather than being filtered.
@@ -264,17 +283,16 @@ int main() {
             continue;
           }
           if (mouseClick->button == sf::Mouse::Button::Left &&
-              (hudStepButton.contains(mousePos) ||
-               hudSolveButton.contains(mousePos))) {
-            if (hudStepButton.contains(mousePos))
-              solver.playTurn();
-            else
-              solver.solve();
-            // The solver plays through Game, so apply the same end-of-move
-            // bookkeeping as a player click.
-            game.checkAndHandleWin();
-            if (game.state == GAME_OVER)
-              game.elapsedSeconds = game.gameClock.getElapsedTime().asSeconds();
+              hudStepButton.contains(mousePos)) {
+            solverRunning = false;
+            if (solver.playTurn())
+              afterSolverTurn();
+            continue;
+          }
+          if (mouseClick->button == sf::Mouse::Button::Left &&
+              hudSolveButton.contains(mousePos)) {
+            solverRunning = !solverRunning;
+            solverTimer.restart();
             continue;
           }
         }
@@ -316,6 +334,8 @@ int main() {
           if (!cell)
             continue;
           const auto [col, row] = *cell;
+          solverRunning = false; // a player click takes over from the solver
+          solverMark.reset();
 
           if (mouseClick->button == sf::Mouse::Button::Left) {
             std::cout << "Left click detected at: " << col << ", " << row
@@ -347,6 +367,20 @@ int main() {
       game.toMenu();
     }
 
+    // Animated solver: one turn per interval while ">>" is active.
+    if (game.state != PLAYING) {
+      solverRunning = false;
+      solverMark.reset();
+    }
+    if (solverRunning &&
+        solverTimer.getElapsedTime().asSeconds() >= SOLVER_TURN_SECONDS) {
+      solverTimer.restart();
+      if (solver.playTurn())
+        afterSolverTurn();
+      else
+        solverRunning = false;
+    }
+
     window.clear(Palette::Body);
     UI::drawDevice(window, game.state != MENU);
 
@@ -357,7 +391,7 @@ int main() {
     } else {
       UI::drawHUD(window, font, game, hudRestartButton, hudStepButton,
                   hudSolveButton);
-      UI::drawBoard(window, font, game);
+      UI::drawBoard(window, font, game, solverMark);
     }
 
     if (game.state == GAME_OVER) {

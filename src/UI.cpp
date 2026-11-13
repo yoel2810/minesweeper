@@ -499,7 +499,8 @@ void drawDevice(sf::RenderWindow &w, bool withHudDivider) {
              {s.size.x - 24.f, HUD_DIVIDER}, Palette::Darkest);
 }
 
-void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game) {
+void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game,
+               std::optional<std::pair<int, int>> marked) {
   const auto size = w.getSize();
   const auto layout =
       BoardLayout::fit(game.columns(), game.rows(), size.x, size.y);
@@ -543,6 +544,17 @@ void drawBoard(sf::RenderWindow &w, sf::Font &font, const Game &game) {
           drawArt(w, FLAG_ART, pos, inner, Palette::Darkest, Palette::Darkest);
       }
     }
+  }
+
+  if (marked && marked->first >= 0 && marked->first < game.columns() &&
+      marked->second >= 0 && marked->second < game.rows()) {
+    sf::RectangleShape outline(sf::Vector2f(inner, inner));
+    outline.setPosition({static_cast<float>(layout.x) + marked->first * cell,
+                         static_cast<float>(layout.y) + marked->second * cell});
+    outline.setFillColor(sf::Color::Transparent);
+    outline.setOutlineColor(Palette::Darkest);
+    outline.setOutlineThickness(-std::max(2.f, std::floor(cell / 8.f)));
+    w.draw(outline);
   }
 }
 

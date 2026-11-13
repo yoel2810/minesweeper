@@ -1,6 +1,8 @@
 #pragma once
 #include "Game.hpp"
 #include <SFML/Graphics.hpp>
+#include <optional>
+#include <utility>
 #include <vector>
 
 // "Pocket LCD" theme: a four-shade green reflective screen set in a plastic
@@ -84,7 +86,9 @@ namespace UI {
   void layoutSolverControls(sf::Vector2u windowSize, Button& stepButton,
                             Button& solveButton);
   void drawDevice(sf::RenderWindow& w, bool withHudDivider);
-  void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game);
+  // `marked` (column, row) gets an outline, e.g. the cell the solver just acted on.
+  void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game,
+                 std::optional<std::pair<int, int>> marked = std::nullopt);
   void drawMenu(sf::RenderWindow& w, sf::Font& font, Button& startButton,
                 NumberField& columns, NumberField& rows, NumberField& minePercent,
                 const std::vector<Button>& difficultyButtons,
