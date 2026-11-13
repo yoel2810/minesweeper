@@ -1,3 +1,4 @@
+#include "Audio.hpp"
 #include "Cell.hpp"
 #include "DisplaySettings.hpp"
 #include "Game.hpp"
@@ -32,6 +33,7 @@ int main() {
     return 1;
   }
 
+  Audio audio;
   Game game;
   game.toMenu();
   Solver solver(game);
@@ -105,6 +107,7 @@ int main() {
       return;
     }
     game.start(*columns, *rows, *minePercent);
+    audio.play(Sfx::Click);
     sizeError.clear();
     focusField(nullptr);
   };
@@ -168,6 +171,7 @@ int main() {
     UI::layoutDifficultyControls(targetSize, minesField, difficultyButtons);
   };
 
+  GameState lastState = game.state;
   while (window.isOpen()) {
     while (const std::optional event = window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
@@ -233,7 +237,9 @@ int main() {
 
       // Global key handling
       if (const auto *key = event->getIf<sf::Event::KeyPressed>()) {
-        if (key->code == sf::Keyboard::Key::R) {
+        if (key->code == sf::Keyboard::Key::M) {
+          audio.toggleMute();
+        } else if (key->code == sf::Keyboard::Key::R) {
           game.restart();
         } else if (key->code == sf::Keyboard::Key::Escape) {
           game.toMenu();
@@ -300,6 +306,7 @@ int main() {
               hudHintButton.contains(mousePos)) {
             hintMark = solver.findHint();
             noHintSince.reset();
+            audio.play(hintMark ? Sfx::Hint : Sfx::NoHint);
             if (!hintMark)
               noHintSince = sf::Clock{};
             continue;
@@ -369,8 +376,16 @@ int main() {
               game.resetGame(col, row);
               game.isFirstClick = false;
             }
+            const int revealedBefore = game.revealedCount();
             game.openCells(col, row);
             game.checkAndHandleWin();
+            if (game.state == PLAYING) {
+              const int opened = game.revealedCount() - revealedBefore;
+              if (opened > 1)
+                audio.play(Sfx::Flood);
+              else if (opened == 1)
+                audio.play(Sfx::Reveal);
+            }
             if (game.state == GAME_OVER) {
               game.elapsedSeconds = game.gameClock.getElapsedTime().asSeconds();
             } else if (game.state == GAME_WON) {
@@ -379,10 +394,25 @@ int main() {
           } else if (mouseClick->button == sf::Mouse::Button::Right) {
             std::cout << "Right click detected at: " << col << ", " << row
                       << std::endl;
+            const int flagsBefore = game.flagCount();
             game.toggleFlag(col, row);
+            if (game.flagCount() > flagsBefore)
+              audio.play(Sfx::Flag);
+            else if (game.flagCount() < flagsBefore)
+              audio.play(Sfx::Unflag);
           }
         }
       }
+    }
+
+    // Win/lose sounds fire on the state change, whoever caused it (player or
+    // solver).
+    if (game.state != lastState) {
+      if (game.state == GAME_OVER)
+        audio.play(Sfx::Mine);
+      else if (game.state == GAME_WON)
+        audio.play(Sfx::Win);
+      lastState = game.state;
     }
 
     // RESTARTING is instant, but handle transition if it was set directly
@@ -438,6 +468,17 @@ int main() {
                       gameWonMenuButton);
     } else if (game.state == RESTARTING) {
       UI::drawRestarting(window, font);
+    }
+
+    if (game.state != MENU) {
+      sf::Text soundLabel(font, audio.isMuted() ? "M: SOUND OFF" : "M: SOUND ON",
+                          18);
+      soundLabel.setFillColor(Palette::Darkest);
+      const auto bounds = soundLabel.getLocalBounds();
+      soundLabel.setPosition(
+          {static_cast<float>(window.getSize().x) - bounds.size.x - 10.f,
+           static_cast<float>(window.getSize().y) - bounds.size.y - 14.f});
+      window.draw(soundLabel);
     }
 
     window.display();
