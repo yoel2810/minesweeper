@@ -15,7 +15,7 @@
 - `src/Cell.hpp` / `src/Cell.cpp` — `Cell { minesCount, isRevealed, isMine, isFlag }`
 - `src/UI.hpp` / `src/UI.cpp` — all visuals drawn with SFML shapes ("Pocket LCD" theme); colors in `namespace Palette`, `Button`, `NumberField`, `UI::layoutControls`, `UI::style*`
 - `src/DisplaySettings.hpp` — windowed/fullscreen state
-- `src/Solver.hpp` / `src/Solver.cpp` — empty stub, not compiled (not in `CMakeLists.txt`); still has a stale `#define GRID_SIZE 12`
+- `src/Solver.hpp` / `src/Solver.cpp` — `Solver` holds a `Game&`; `playTurn()` / `solve()` are stubs. Compiled into `minesweeper` only (not `board_tests`). Triggered by the HUD `>` (one turn) and `>>` (full solve) buttons placed by `UI::layoutSolverControls`; `main.cpp` runs the win/loss bookkeeping after each call
 - `tests/BoardTests.cpp` — `board_tests` target: plain `main()` with a `require(cond, msg)` helper, no framework; covers `NumberField` input, `UI::layoutControls` positions, `DisplaySettings`/F11 latch, `parseBoardDimension`, and `Game` sizing, first-click safety, mine counts, and win detection
 - `assets/fonts/VT323-Regular.ttf` (OFL, license alongside) is the game font; `assets/fonts/DejaVuSans.ttf` is used only by tests; `assets/images/*.png` are legacy and unused
 - `build/`, `out/`, `build-vs/`, `.cache/`, `.clangd`, IDE dirs are gitignored

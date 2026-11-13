@@ -1,6 +1,7 @@
 #include "Cell.hpp"
 #include "DisplaySettings.hpp"
 #include "Game.hpp"
+#include "Solver.hpp"
 #include "UI.hpp"
 #include <SFML/Graphics.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -31,6 +32,7 @@ int main() {
 
   Game game;
   game.toMenu();
+  Solver solver(game);
 
   // Create buttons
   // The pixel font should stay crisp rather than being filtered.
@@ -56,6 +58,13 @@ int main() {
   Button hudRestartButton(font, "R", sf::Vector2f(304.f, 20.f),
                           sf::Vector2f(32.f, 32.f), 26);
   hudRestartButton.shadowOffset = 3.f;
+  // Solver keys: ">" plays one solver turn, ">>" runs the full solve.
+  Button hudStepButton(font, ">", sf::Vector2f(264.f, 20.f),
+                       sf::Vector2f(32.f, 32.f), 26);
+  Button hudSolveButton(font, ">>", sf::Vector2f(344.f, 20.f),
+                        sf::Vector2f(32.f, 32.f), 26);
+  hudStepButton.shadowOffset = 3.f;
+  hudSolveButton.shadowOffset = 3.f;
   Button gameOverRestartButton(font, "RESTART", sf::Vector2f(220.f, 240.f),
                                sf::Vector2f(200.f, 42.f), 28);
   Button gameOverMenuButton(font, "MENU", sf::Vector2f(220.f, 292.f),
@@ -66,6 +75,8 @@ int main() {
                            sf::Vector2f(200.f, 42.f), 28);
   UI::styleRubber(menuStartButton);
   UI::styleRubber(hudRestartButton);
+  UI::styleRubber(hudStepButton);
+  UI::styleRubber(hudSolveButton);
   UI::styleScreenPrimary(gameOverRestartButton);
   UI::styleScreenSecondary(gameOverMenuButton);
   UI::styleScreenPrimary(gameWonAgainButton);
@@ -75,6 +86,7 @@ int main() {
                      rowsField, hudRestartButton, gameOverRestartButton,
                      gameOverMenuButton, gameWonAgainButton,
                      gameWonMenuButton);
+  UI::layoutSolverControls(window.getSize(), hudStepButton, hudSolveButton);
   auto toggleFullscreen = [&]() {
     displaySettings.toggle(window.getSize());
     const auto targetSize = displaySettings.targetSize(
@@ -91,6 +103,7 @@ int main() {
                        hudRestartButton, gameOverRestartButton,
                        gameOverMenuButton, gameWonAgainButton,
                        gameWonMenuButton);
+    UI::layoutSolverControls(targetSize, hudStepButton, hudSolveButton);
   };
 
   while (window.isOpen()) {
@@ -106,6 +119,8 @@ int main() {
                            rowsField, hudRestartButton,
                            gameOverRestartButton, gameOverMenuButton,
                            gameWonAgainButton, gameWonMenuButton);
+        UI::layoutSolverControls(resized->size, hudStepButton,
+                                 hudSolveButton);
       }
 
       if (const auto *key = event->getIf<sf::Event::KeyPressed>();
@@ -160,6 +175,8 @@ int main() {
           menuStartButton.setHovered(menuStartButton.contains(pos));
         } else if (game.state == PLAYING) {
           hudRestartButton.setHovered(hudRestartButton.contains(pos));
+          hudStepButton.setHovered(hudStepButton.contains(pos));
+          hudSolveButton.setHovered(hudSolveButton.contains(pos));
         } else if (game.state == GAME_OVER) {
           gameOverRestartButton.setHovered(gameOverRestartButton.contains(pos));
           gameOverMenuButton.setHovered(gameOverMenuButton.contains(pos));
@@ -191,6 +208,20 @@ int main() {
           if (hudRestartButton.contains(mousePos) &&
               mouseClick->button == sf::Mouse::Button::Left) {
             game.restart();
+            continue;
+          }
+          if (mouseClick->button == sf::Mouse::Button::Left &&
+              (hudStepButton.contains(mousePos) ||
+               hudSolveButton.contains(mousePos))) {
+            if (hudStepButton.contains(mousePos))
+              solver.playTurn();
+            else
+              solver.solve();
+            // The solver plays through Game, so apply the same end-of-move
+            // bookkeeping as a player click.
+            game.checkAndHandleWin();
+            if (game.state == GAME_OVER)
+              game.elapsedSeconds = game.gameClock.getElapsedTime().asSeconds();
             continue;
           }
         }
@@ -270,7 +301,8 @@ int main() {
       // The menu is a boot screen: no board or HUD behind it.
       UI::drawMenu(window, font, menuStartButton, columnsField, rowsField, sizeError);
     } else {
-      UI::drawHUD(window, font, game, hudRestartButton);
+      UI::drawHUD(window, font, game, hudRestartButton, hudStepButton,
+                  hudSolveButton);
       UI::drawBoard(window, font, game);
     }
 

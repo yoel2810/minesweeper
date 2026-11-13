@@ -17,7 +17,7 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
-add_executable(minesweeper src/main.cpp src/Cell.cpp src/Game.cpp src/UI.cpp)
+add_executable(minesweeper src/main.cpp src/Cell.cpp src/Game.cpp src/UI.cpp src/Solver.cpp)
 target_compile_features(minesweeper PRIVATE cxx_std_17)
 target_link_libraries(minesweeper PRIVATE SFML::Graphics)
 

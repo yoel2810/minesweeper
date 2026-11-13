@@ -50,9 +50,12 @@ int main() {
   Button overMenu(font, "Menu", {0.f, 0.f}, {200.f, 42.f});
   Button wonAgain(font, "Again", {0.f, 0.f}, {200.f, 42.f});
   Button wonMenu(font, "Menu", {0.f, 0.f}, {200.f, 42.f});
+  Button stepButton(font, ">", {0.f, 0.f}, {32.f, 32.f});
+  Button solveButton(font, ">>", {0.f, 0.f}, {32.f, 32.f});
   for (const auto viewport : {sf::Vector2u(480, 360), sf::Vector2u(1200, 700)}) {
     UI::layoutControls(viewport, startButton, layoutColumns, layoutRows,
                        hudButton, overRestart, overMenu, wonAgain, wonMenu);
+    UI::layoutSolverControls(viewport, stepButton, solveButton);
     const float centerX = static_cast<float>(viewport.x) / 2.f;
     const float centerY =
         HEADER_H + (static_cast<float>(viewport.y) - HEADER_H) / 2.f;
@@ -66,6 +69,10 @@ int main() {
             "Menu fields are not centered after resize");
     require(hudButton.shape.getPosition() == sf::Vector2f(centerX - 16.f, 20.f),
             "HUD button is not centered after resize");
+    require(stepButton.shape.getPosition() == sf::Vector2f(centerX - 56.f, 20.f) &&
+                solveButton.shape.getPosition() ==
+                    sf::Vector2f(centerX + 24.f, 20.f),
+            "Solver buttons do not flank the HUD restart button");
     require(overRestart.shape.getPosition() ==
                     sf::Vector2f(centerX - 100.f, centerY + 10.f) &&
                 overMenu.shape.getPosition() ==

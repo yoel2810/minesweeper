@@ -71,11 +71,15 @@ namespace UI {
                       Button& hudRestartButton, Button& gameOverRestartButton,
                       Button& gameOverMenuButton, Button& gameWonAgainButton,
                       Button& gameWonMenuButton);
+  // Solver keys flank the HUD restart button: step left, solve right.
+  void layoutSolverControls(sf::Vector2u windowSize, Button& stepButton,
+                            Button& solveButton);
   void drawDevice(sf::RenderWindow& w, bool withHudDivider);
   void drawBoard(sf::RenderWindow& w, sf::Font& font, const Game& game);
   void drawMenu(sf::RenderWindow& w, sf::Font& font, Button& startButton,
                 NumberField& columns, NumberField& rows, const std::string& error);
-  void drawHUD(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton);
+  void drawHUD(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton,
+               Button& stepButton, Button& solveButton);
   void drawGameOver(sf::RenderWindow& w, sf::Font& font, Game& game, Button& restartButton, Button& menuButton);
   void drawGameWon(sf::RenderWindow& w, sf::Font& font, Game& game, Button& againButton, Button& menuButton);
   void drawRestarting(sf::RenderWindow& w, sf::Font& font);

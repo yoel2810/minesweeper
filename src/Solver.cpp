@@ -2,8 +2,12 @@
 
 Solver::Solver(Game &currentGame) : game(currentGame) {}
 
-Cell
+void Solver::playTurn()
+{
+    // TODO: LATER
+}
 
-    // void Solver::playTurn() {
-    //     game.
-    // }
+void Solver::solve()
+{
+    // TODO: LATER
+}

@@ -438,6 +438,13 @@ void layoutControls(sf::Vector2u windowSize, Button &startButton,
   gameWonMenuButton.setPosition({centerX - 100.f, centerY + 62.f});
 }
 
+void layoutSolverControls(sf::Vector2u windowSize, Button &stepButton,
+                          Button &solveButton) {
+  const float centerX = static_cast<float>(windowSize.x) / 2.f;
+  stepButton.setPosition({centerX - 56.f, 20.f});
+  solveButton.setPosition({centerX + 24.f, 20.f});
+}
+
 void drawDevice(sf::RenderWindow &w, bool withHudDivider) {
   const auto size = w.getSize();
   const sf::Vector2f full(static_cast<float>(size.x), static_cast<float>(size.y));
@@ -551,7 +558,7 @@ void drawMenu(sf::RenderWindow &w, sf::Font &font, Button &startButton,
 }
 
 void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
-             Button &restartButton) {
+             Button &restartButton, Button &stepButton, Button &solveButton) {
   const float width = static_cast<float>(w.getSize().x);
   const float centerY = SCREEN_INSET + (HEADER_H - HUD_DIVIDER - 2.f - SCREEN_INSET) / 2.f;
   const int remaining = std::max(0, game.mineCount() - game.flagCount());
@@ -562,6 +569,8 @@ void drawHUD(sf::RenderWindow &w, sf::Font &font, Game &game,
   drawReadout(w, font, formatTime(displayedSeconds(game)), "TIME",
               width - SCREEN_INSET - 18.f, centerY, true);
   restartButton.draw(w);
+  stepButton.draw(w);
+  solveButton.draw(w);
 }
 
 void drawGameOver(sf::RenderWindow &w, sf::Font &font, Game &game,

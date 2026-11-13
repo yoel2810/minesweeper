@@ -1,8 +1,6 @@
 #pragma once
 #include "Game.hpp"
 
-#define GRID_SIZE 12
-
 class Solver {
 private:
   // Cell[][] calculateBoard();
