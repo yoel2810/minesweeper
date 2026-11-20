@@ -1,94 +1,125 @@
-## Overview
+# Minesweeper
 
-Build a Minesweeper game in C++, then create a machine-learning agent that can learn to solve it.
+A Minesweeper game written from scratch in C++17 with SFML, plus a built-in
+solver that can give hints or play the whole game for you.
 
 <p align="center">
   <img src="docs/minesweeper.gif" alt="Minesweeper solver clearing an Easy board">
 </p>
 
-## Goals
+## Features
 
-- Build a complete Minesweeper implementation from scratch.
-- Represent the game state in a form suitable for machine learning.
-- Generate training data through gameplay.
-- Train and evaluate an agent that learns to make decisions.
+- Boards from 4×4 to 30×30, with Easy / Medium / Hard presets (10 / 15 / 20 %
+  mines) or a custom mine percentage from 5 to 50 %
+- The first click is always safe: it and its neighbours never hold a mine, so
+  every game opens with a clear area
+- Chording, flags, a mine counter, a timer and pause
+- A solver that never guesses when a safe move can be proven, and picks the
+  safest cell by probability when one can't
+- Hints: ask for a cell the solver has proven safe
+- Resizable window and borderless fullscreen
+- Synthesized sound effects (no audio files)
 
-## Concepts to Learn
+## Download
 
-- C++ game architecture
-- Grid and state representation
-- Probability and uncertainty
-- Machine learning fundamentals
-- Training data generation
-- Model evaluation
-- Reinforcement learning or supervised learning
+A Windows installer is attached to each
+[GitHub release](https://github.com/yoel2810/minesweeper/releases/latest).
 
-## Milestones
+## How to play
 
-- [V]  Implement the Minesweeper game.
-- [V]  Implement win/loss detection and game state management.
-- [ ]  Create a non-ML solver as a baseline.
-- [ ]  Design the ML problem and state representation.
-- [ ]  Generate training data.
-- [ ]  Train the first model.
-- [ ]  Evaluate the model against the baseline.
-- [ ]  Visualize the agent playing.
+Choose a difficulty (or set columns, rows and mine percentage) in the menu and
+press **Start Game**.
 
-## Build and run on Windows
+| Input | Action |
+| --- | --- |
+| Left click | Reveal a cell |
+| Left click on a number | Chord: reveal its unflagged neighbours once the right number of flags is placed around it |
+| Right click | Place or remove a flag |
+| `?` button | Hint: highlight a cell that is proven safe |
+| `>` button | Let the solver play one move |
+| `>>` button | Let the solver play on its own; press again or click the board to stop |
+| `R` | Restart with the same settings |
+| `P` | Pause / resume |
+| `M` | Mute / unmute |
+| `Esc` | Back to the menu |
+| `F11` | Toggle fullscreen |
+| `Tab` / `Enter` (menu) | Move between fields / start the game |
 
-Requires MSYS2 UCRT64 with GCC (C++17), CMake 3.28 or newer, and Ninja.
-The commands below assume MSYS2 is installed at `C:\msys64`; adjust the paths
-if your installation or project folder is elsewhere.
+## How the solver works
 
-### Git Bash
+Each move, the solver tries cheap rules first and moves on only when they find
+nothing:
+
+1. **Basic rules:** a number whose mines are all flagged clears its other
+   neighbours, and a number with exactly as many hidden neighbours as missing
+   mines flags them all.
+2. **Subset rule:** compares overlapping pairs of numbers.
+3. **Exhaustive search:** enumerates every mine layout that fits the border
+   of the revealed area, using the total mine count, to find cells that are
+   safe or mined in every layout.
+4. **Guess:** if nothing is certain, it reveals the cell with the lowest
+   probability of holding a mine.
+
+It ignores your flags until it can prove them, so a wrong flag can't mislead
+it. The full algorithm is in [docs/solver-pseudocode.md](docs/solver-pseudocode.md).
+
+## Build from source (Windows)
+
+Requires CMake 3.28 or newer and one of these toolchains:
+
+- **MSYS2 UCRT64** with GCC and Ninja (the main toolchain). Put
+  `C:\msys64\ucrt64\bin` on `PATH` in the terminal you build from.
+- **Visual Studio 2022.**
+
+From the repository root:
 
 ```bash
-cd /c/Users/yoel2/Projects/minesweeper
-export PATH="/c/msys64/ucrt64/bin:$PATH"
+# MSYS2 / Ninja
 cmake -S . -B build -G Ninja
 cmake --build build
 ./build/bin/minesweeper.exe
 ```
 
-### PowerShell
-
 ```powershell
-cd C:\Users\yoel2\Projects\minesweeper
-$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-cmake -S . -B build -G Ninja
-cmake --build build
-.\build\bin\minesweeper.exe
-```
-
-### Visual Studio fallback
-
-If Ninja or the MSYS2 compiler is not available, use the Visual Studio 2022
-compiler instead. Run these commands from PowerShell in the project root:
-
-```powershell
-cd C:\Users\yoel2\Projects\Minesweeper
+# Visual Studio
 cmake -S . -B build-vs -G "Visual Studio 17 2022"
-cmake --build build-vs --config Release --parallel 1
+cmake --build build-vs --config Release
 .\build-vs\bin\Release\minesweeper.exe
 ```
 
-The first configure downloads SFML 3.1.0 and requires an internet connection;
-it can take a while. For subsequent runs, you can skip the configure command
-unless the build configuration changes.
+The first configure downloads SFML 3.1.0, so it needs an internet connection
+and takes a while. Ninja builds default to `Release`; add
+`-DCMAKE_BUILD_TYPE=Debug` for a debug build. The MinGW build links its
+runtime statically, so the exe runs without MSYS2 on `PATH`.
 
-The game finds `assets/fonts/` next to the executable or in the repository
-above `build/bin` (or `build-vs/bin/<Config>`), so it can be launched from
-any directory. Single-config builds (Ninja) default to `Release`; pass
-`-DCMAKE_BUILD_TYPE=Debug` to the configure command for a debug build.
+### Tests and benchmark
 
-Run the tests with `ctest --test-dir build`. `build/bin/solver_bench.exe
-[columns rows games [seed [minePercent]]]` plays the solver on random boards
-and reports wins, guesses and the slowest turn.
+```bash
+ctest --test-dir build
+./build/bin/solver_bench.exe [columns rows games [seed [minePercent]]]
+```
 
-The window can be resized by dragging its border. Press `F11` while playing
-or from a menu to toggle fullscreen; press `F11` again to restore the previous
-windowed size.
+The benchmark plays the solver on random boards and reports wins, guesses and
+the slowest turn.
 
-The PATH command applies only to the current terminal session. Run it again
-in a new terminal so Windows can find the MSYS2 runtime DLLs, including
-`libstdc++-6.dll`, `libgcc_s_seh-1.dll`, and `libwinpthread-1.dll`.
+### Installer
+
+`installer/minesweeper.iss` is an [Inno Setup](https://jrsoftware.org/isinfo.php)
+script that packages the Release exe (from the Ninja `build/bin`) and the font.
+
+## Roadmap
+
+The game and the classic solver are done. The long-term plan is a
+machine-learning agent that learns to play:
+
+- [ ] Design the ML problem and the state representation
+- [ ] Generate training data from games
+- [ ] Train a first model
+- [ ] Evaluate it against the classic solver
+- [ ] Visualize the agent playing
+
+## Credits
+
+- Game font: [VT323](https://fonts.google.com/specimen/VT323) by The VT323
+  Project Authors, under the SIL Open Font License (`assets/fonts/VT323-OFL.txt`)
+- Built with [SFML](https://www.sfml-dev.org/)
