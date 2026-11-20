@@ -2,6 +2,8 @@
 
 Build a Minesweeper game in C++, then create a machine-learning agent that can learn to solve it.
 
+![Minesweeper solver clearing an Easy board](docs/minesweeper.gif)
+
 ## Goals
 
 - Build a complete Minesweeper implementation from scratch.
